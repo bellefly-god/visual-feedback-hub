@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils";
 
 const statusConfig = {
-  pending: { label: "Pending", className: "bg-warning/10 text-warning border-warning/20" },
-  fixed: { label: "Fixed", className: "bg-primary/10 text-primary border-primary/20" },
-  approved: { label: "Approved", className: "bg-success/10 text-success border-success/20" },
+  pending: { label: "Pending", className: "text-warning" },
+  fixed: { label: "Fixed", className: "text-primary" },
+  approved: { label: "Approved", className: "text-success" },
 };
 
 interface StatusBadgeProps {
@@ -14,13 +14,7 @@ interface StatusBadgeProps {
 export function StatusBadge({ status, className }: StatusBadgeProps) {
   const config = statusConfig[status];
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
-        config.className,
-        className
-      )}
-    >
+    <span className={cn("text-[11px] font-medium", config.className, className)}>
       {config.label}
     </span>
   );

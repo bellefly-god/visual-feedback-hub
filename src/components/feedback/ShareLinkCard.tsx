@@ -18,30 +18,27 @@ export function ShareLinkCard({ link = "https://feedbackmark.co/review/abc123", 
   };
 
   return (
-    <div className="glass-card mx-auto w-full max-w-md p-6 text-center">
-      <div className="mb-4 mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-success/10">
-        <Check className="h-6 w-6 text-success" />
-      </div>
-      <h3 className="font-display text-lg font-semibold text-foreground">Ready to share!</h3>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Your feedback project is saved. Share this link with your client or team.
+    <div className="mx-auto w-full max-w-sm rounded-2xl border border-border/60 bg-card p-6 text-center shadow-lg">
+      <h3 className="font-display text-base font-semibold text-foreground">Ready to share</h3>
+      <p className="mt-1.5 text-[13px] text-muted-foreground">
+        Share this link with your client or team.
       </p>
-      <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-muted/50 p-2">
-        <span className="flex-1 truncate text-left text-sm text-foreground">{link}</span>
+      <div className="mt-4 flex items-center gap-2 rounded-lg bg-muted/50 p-2">
+        <span className="flex-1 truncate text-left text-[13px] text-foreground/70">{link}</span>
         <button
           onClick={handleCopy}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-card text-muted-foreground transition-colors hover:text-foreground border border-border"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
         >
-          {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+          {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
         </button>
       </div>
       <div className="mt-4 flex gap-2">
-        <Button variant="outline" className="flex-1" onClick={onClose}>
+        <Button variant="ghost" className="flex-1 h-9 text-[13px]" onClick={onClose}>
           Close
         </Button>
-        <Button className="flex-1" asChild>
+        <Button className="flex-1 h-9 text-[13px]" asChild>
           <Link to="/review">
-            <ExternalLink className="mr-1.5 h-4 w-4" />
+            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
             Open Review
           </Link>
         </Button>

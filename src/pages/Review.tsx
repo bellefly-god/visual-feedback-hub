@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { CommentCard } from "@/components/feedback/CommentCard";
-import { StatusBadge } from "@/components/feedback/StatusBadge";
 import { mockComments } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,38 +13,33 @@ export default function ReviewPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Minimal review header */}
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <MessageSquare className="h-4 w-4 text-primary-foreground" />
+      <header className="border-b border-border/60 bg-card/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+              <MessageSquare className="h-3.5 w-3.5 text-primary-foreground" />
             </div>
-            <span className="font-display text-lg font-bold text-foreground">FeedbackMark</span>
+            <span className="font-display text-[15px] font-semibold text-foreground">FeedbackMark</span>
           </div>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Shared review</span>
-            <StatusBadge status="pending" />
-          </div>
+          <span className="text-[13px] text-muted-foreground">Shared review</span>
         </div>
       </header>
 
       <div className="flex h-[calc(100vh-3.5rem)]">
-        {/* Canvas */}
-        <div className="relative flex-1 overflow-auto bg-muted/30 p-8">
-          <div className="mb-4">
-            <h1 className="font-display text-xl font-bold text-foreground">Homepage Redesign v2</h1>
-            <p className="text-sm text-muted-foreground">Review and leave your feedback below.</p>
+        <div className="relative flex-1 overflow-auto p-10">
+          <div className="mb-6">
+            <h1 className="font-display text-lg font-semibold text-foreground">Homepage Redesign v2</h1>
+            <p className="mt-1 text-[13px] text-muted-foreground">Review and leave your feedback.</p>
           </div>
-          <div className="mx-auto aspect-[16/10] max-w-4xl rounded-xl border border-border bg-card shadow-sm">
-            <div className="relative h-full w-full rounded-xl bg-gradient-to-br from-muted/50 to-primary/[0.03]">
+          <div className="mx-auto aspect-[16/10] max-w-4xl rounded-xl border border-border/60 bg-card">
+            <div className="relative h-full w-full rounded-xl bg-gradient-to-br from-muted/30 to-background">
               {mockComments.map((comment) => (
                 <button
                   key={comment.id}
-                  className={`absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-xs font-bold shadow-md transition-all duration-200 ${
+                  className={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[11px] font-semibold transition-all duration-200 ${
                     activeComment === comment.id
-                      ? "scale-125 bg-primary text-primary-foreground ring-4 ring-primary/20"
-                      : "bg-primary/90 text-primary-foreground hover:scale-110"
+                      ? "scale-125 bg-primary text-primary-foreground ring-[3px] ring-primary/15"
+                      : "bg-primary/80 text-primary-foreground hover:scale-110"
                   }`}
                   style={{ left: `${comment.x}%`, top: `${comment.y}%` }}
                   onClick={() => setActiveComment(comment.id)}
@@ -54,20 +48,21 @@ export default function ReviewPage() {
                 </button>
               ))}
               <div className="flex h-full items-center justify-center">
-                <p className="text-sm text-muted-foreground/50">Design preview</p>
+                <p className="text-[13px] text-muted-foreground/30">Design preview</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Sidebar */}
-        <div className="flex w-96 shrink-0 flex-col border-l border-border bg-card">
-          <div className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-semibold text-foreground">Feedback & Discussion</h2>
-            <p className="text-xs text-muted-foreground">{mockComments.length} comments on this project</p>
+        <div className="flex w-80 shrink-0 flex-col border-l border-border/60 bg-card">
+          <div className="px-4 py-3">
+            <p className="text-[13px] font-medium text-foreground">
+              Comments
+              <span className="ml-1.5 text-muted-foreground">{mockComments.length}</span>
+            </p>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          <div className="flex-1 overflow-y-auto px-3 space-y-1.5">
             {mockComments.map((comment) => (
               <CommentCard
                 key={comment.id}
@@ -79,29 +74,28 @@ export default function ReviewPage() {
             ))}
           </div>
 
-          {/* Reply + Actions */}
-          <div className="border-t border-border p-4 space-y-3">
+          <div className="border-t border-border/60 p-4 space-y-3">
             {active && (
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1">
-                  <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                <Button variant="outline" size="sm" className="flex-1 h-8 text-[13px]">
+                  <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
                   Approve
                 </Button>
-                <Button variant="outline" size="sm" className="flex-1">
-                  <RotateCcw className="mr-1.5 h-4 w-4" />
-                  Request Revision
+                <Button variant="outline" size="sm" className="flex-1 h-8 text-[13px]">
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  Revise
                 </Button>
               </div>
             )}
             <div className="flex gap-2">
               <Textarea
                 placeholder="Write a reply..."
-                className="min-h-[60px] resize-none text-sm"
+                className="min-h-[52px] resize-none text-[13px]"
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
               />
-              <Button size="sm" className="h-auto self-end">
-                <Send className="h-4 w-4" />
+              <Button size="sm" className="h-auto self-end px-2.5">
+                <Send className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
