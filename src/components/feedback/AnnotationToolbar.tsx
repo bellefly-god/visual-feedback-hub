@@ -4,31 +4,31 @@ import { useState } from "react";
 
 const tools = [
   { id: "select", icon: MousePointer2, label: "Select" },
-  { id: "pin", icon: MessageCircle, label: "Comment Pin" },
+  { id: "pin", icon: MessageCircle, label: "Pin" },
   { id: "arrow", icon: ArrowUpRight, label: "Arrow" },
   { id: "rect", icon: Square, label: "Highlight" },
-  { id: "text", icon: Type, label: "Text Note" },
-  { id: "voice", icon: Mic, label: "Voice Note" },
+  { id: "text", icon: Type, label: "Text" },
+  { id: "voice", icon: Mic, label: "Voice" },
 ];
 
 export function AnnotationToolbar() {
   const [activeTool, setActiveTool] = useState("pin");
 
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-xl border border-border bg-card p-1 shadow-sm">
+    <div className="inline-flex items-center gap-px rounded-lg bg-muted/60 p-0.5">
       {tools.map((tool) => (
         <button
           key={tool.id}
           onClick={() => setActiveTool(tool.id)}
           title={tool.label}
           className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-150",
+            "flex h-7 w-7 items-center justify-center rounded-md transition-all duration-100",
             activeTool === tool.id
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              ? "bg-foreground text-background shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
           )}
         >
-          <tool.icon className="h-4 w-4" />
+          <tool.icon className="h-3.5 w-3.5" />
         </button>
       ))}
     </div>

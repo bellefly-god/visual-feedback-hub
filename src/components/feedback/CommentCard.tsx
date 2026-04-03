@@ -15,41 +15,35 @@ export function CommentCard({ comment, isActive, onClick, showReplies = false }:
     <div
       onClick={onClick}
       className={cn(
-        "cursor-pointer rounded-xl border p-3.5 transition-all duration-200",
+        "cursor-pointer rounded-xl p-3 transition-all duration-150",
         isActive
-          ? "border-primary/30 bg-primary/5 shadow-sm"
-          : "border-border bg-card hover:border-primary/20 hover:shadow-sm"
+          ? "bg-muted/80"
+          : "hover:bg-muted/50"
       )}
     >
-      <div className="mb-2 flex items-start justify-between">
+      <div className="mb-1.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground/[0.06] text-[10px] font-semibold text-foreground/70">
             {comment.avatar}
           </div>
-          <div>
-            <p className="text-sm font-medium text-foreground">{comment.author}</p>
-            <p className="text-xs text-muted-foreground">{comment.createdAt}</p>
-          </div>
+          <span className="text-[13px] font-medium text-foreground">{comment.author}</span>
         </div>
         <StatusBadge status={comment.status} />
       </div>
-      <p className="text-sm leading-relaxed text-foreground/80">{comment.message}</p>
-      {comment.replies.length > 0 && (
-        <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+      <p className="text-[13px] leading-relaxed text-muted-foreground">{comment.message}</p>
+      {comment.replies.length > 0 && !showReplies && (
+        <div className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground/70">
           <MessageCircle className="h-3 w-3" />
           <span>{comment.replies.length} {comment.replies.length === 1 ? "reply" : "replies"}</span>
         </div>
       )}
       {showReplies && comment.replies.map((reply, i) => (
-        <div key={i} className="mt-3 ml-4 border-l-2 border-border pl-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-              {reply.avatar}
-            </div>
-            <span className="text-xs font-medium">{reply.author}</span>
-            <span className="text-xs text-muted-foreground">{reply.createdAt}</span>
+        <div key={i} className="mt-2.5 ml-3 border-l border-border pl-3">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[12px] font-medium text-foreground/70">{reply.author}</span>
+            <span className="text-[11px] text-muted-foreground/60">{reply.createdAt}</span>
           </div>
-          <p className="mt-1 text-sm text-foreground/70">{reply.message}</p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">{reply.message}</p>
         </div>
       ))}
     </div>
