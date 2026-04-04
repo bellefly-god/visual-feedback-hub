@@ -26,8 +26,15 @@ export function FabricAnnotationLayer({ comments, activeCommentId }: FabricAnnot
     const element = canvasRef.current;
     const resize = () => {
       const { clientWidth, clientHeight } = element;
-      canvas.setWidth(clientWidth);
-      canvas.setHeight(clientHeight);
+      if (typeof (canvas as unknown as { setDimensions?: (size: { width: number; height: number }) => void }).setDimensions === "function") {
+        (canvas as unknown as { setDimensions: (size: { width: number; height: number }) => void }).setDimensions({
+          width: clientWidth,
+          height: clientHeight,
+        });
+      } else {
+        (canvas as unknown as { setWidth?: (width: number) => void }).setWidth?.(clientWidth);
+        (canvas as unknown as { setHeight?: (height: number) => void }).setHeight?.(clientHeight);
+      }
       canvas.requestRenderAll();
     };
 
