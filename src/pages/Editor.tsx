@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type PointerEvent } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import {
   AnnotationToolbar,
@@ -181,10 +181,12 @@ export default function EditorPage() {
     });
   };
 
-  const handleCanvasMouseDown = (event: MouseEvent<HTMLDivElement>) => {
+  const handleCanvasPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (!isAddingComment || draftShapeTool === "pin") {
       return;
     }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
 
     const point = getCanvasPoint(event);
     setDrawingStart(point);
@@ -198,7 +200,7 @@ export default function EditorPage() {
     });
   };
 
-  const handleCanvasMouseMove = (event: MouseEvent<HTMLDivElement>) => {
+  const handleCanvasPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!isDrawingShape || !drawingStart || !isAddingComment || draftShapeTool === "pin") {
       return;
     }
@@ -230,7 +232,11 @@ export default function EditorPage() {
     });
   };
 
-  const handleCanvasMouseUp = () => {
+  const handleCanvasPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
     if (!isDrawingShape) {
       return;
     }
@@ -326,7 +332,24 @@ export default function EditorPage() {
           <h2 className="text-[13px] font-medium text-foreground">{projectName}</h2>
         </div>
         <div className="flex items-center gap-2.5">
-          <AnnotationToolbar activeTool={activeTool} onToolChange={setActiveTool} />
+          <AnnotationToolbar
+            activeTool={activeTool}
+            onToolChange={(tool) => {
+              setActiveTool(tool);
+
+              if (drawableTools.includes(tool) || tool === "voice") {
+                setIsAddingComment(true);
+                setEditorMessage(null);
+                return;
+              }
+
+              setIsAddingComment(false);
+              setDraftGeometry(null);
+              setDrawingStart(null);
+              setIsDrawingShape(false);
+              setEditorMessage("Select pin / arrow / rectangle / highlight to add annotations.");
+            }}
+          />
           <span className="h-4 w-px bg-border" />
           <Button
             variant="ghost"
@@ -447,19 +470,21 @@ export default function EditorPage() {
               className={`relative h-full w-full rounded-xl bg-gradient-to-br from-muted/30 to-background ${
                 isAddingComment ? "cursor-crosshair" : ""
               }`}
-              onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseUp={handleCanvasMouseUp}
-              onMouseLeave={handleCanvasMouseUp}
+              onPointerDown={handleCanvasPointerDown}
+              onPointerMove={handleCanvasPointerMove}
+              onPointerUp={handleCanvasPointerUp}
+              onPointerCancel={handleCanvasPointerUp}
               onClick={handleCanvasClick}
             >
-              <AssetPreview
-                assetType={assetType}
-                assetUrl={assetUrl}
-                page={assetType === "pdf" ? currentPdfPage : undefined}
-                onPageChange={assetType === "pdf" ? setCurrentPdfPage : undefined}
-                onPageCountChange={assetType === "pdf" ? setPdfPageCount : undefined}
-              />
+              <div className={isAddingComment ? "pointer-events-none h-full w-full" : "h-full w-full"}>
+                <AssetPreview
+                  assetType={assetType}
+                  assetUrl={assetUrl}
+                  page={assetType === "pdf" ? currentPdfPage : undefined}
+                  onPageChange={assetType === "pdf" ? setCurrentPdfPage : undefined}
+                  onPageCountChange={assetType === "pdf" ? setPdfPageCount : undefined}
+                />
+              </div>
               <FabricAnnotationLayer comments={visibleComments} activeCommentId={activeComment} />
               {visibleComments.map((comment) => (
                 <button

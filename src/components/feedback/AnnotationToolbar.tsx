@@ -18,11 +18,17 @@ const iconByTool: Record<AnnotationToolId, ComponentType<{ className?: string }>
   voice: Mic,
 };
 
+const disabledTools = new Set<AnnotationToolId>(["select", "text"]);
+
 export function AnnotationToolbar({ activeTool: controlledTool, onToolChange }: AnnotationToolbarProps) {
   const [internalTool, setInternalTool] = useState<AnnotationToolId>("pin");
   const activeTool = controlledTool ?? internalTool;
 
   const setTool = (tool: AnnotationToolId) => {
+    if (disabledTools.has(tool)) {
+      return;
+    }
+
     setInternalTool(tool);
     onToolChange?.(tool);
   };
@@ -35,10 +41,12 @@ export function AnnotationToolbar({ activeTool: controlledTool, onToolChange }: 
         return (
           <button
             key={tool.id}
+            disabled={disabledTools.has(tool.id)}
             onClick={() => setTool(tool.id)}
-            title={tool.label}
+            title={disabledTools.has(tool.id) ? `${tool.label} (coming soon)` : tool.label}
             className={cn(
               "flex h-7 w-7 items-center justify-center rounded-md transition-all duration-100",
+              disabledTools.has(tool.id) && "cursor-not-allowed opacity-45",
               activeTool === tool.id
                 ? "bg-foreground text-background shadow-sm"
                 : "text-muted-foreground hover:text-foreground",

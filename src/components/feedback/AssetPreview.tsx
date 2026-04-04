@@ -31,7 +31,12 @@ export function AssetPreview({ assetType, assetUrl, page, onPageChange, onPageCo
 
   return (
     <div className="h-full w-full overflow-hidden rounded-xl bg-muted/20">
-      <img src={assetUrl} alt="Uploaded asset preview" className="h-full w-full object-contain" />
+      <img
+        src={assetUrl}
+        alt="Uploaded asset preview"
+        className="h-full w-full object-contain"
+        draggable={false}
+      />
     </div>
   );
 }
