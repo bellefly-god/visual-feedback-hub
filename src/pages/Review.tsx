@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CommentCard } from "@/components/feedback/CommentCard";
 import { AssetPreview } from "@/components/feedback/AssetPreview";
-import { FabricAnnotationLayer } from "@/components/feedback/FabricAnnotationLayer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MessageSquare, CheckCircle2, RotateCcw, Send } from "lucide-react";
@@ -180,7 +179,6 @@ export default function ReviewPage() {
                 onPageChange={assetType === "pdf" ? setCurrentPdfPage : undefined}
                 onPageCountChange={assetType === "pdf" ? setPdfPageCount : undefined}
               />
-              <FabricAnnotationLayer comments={visibleComments} activeCommentId={activeComment} />
               {visibleComments.map((comment) => (
                 <button
                   key={comment.id}

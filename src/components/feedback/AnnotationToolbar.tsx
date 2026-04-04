@@ -1,4 +1,4 @@
-import { MousePointer2, MessageCircle, ArrowUpRight, Square, Highlighter, Type, Mic } from "lucide-react";
+import { MousePointer2, MessageCircle, PenTool, ArrowUpRight, Square, Highlighter, Type, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, type ComponentType } from "react";
 import { annotationTools, type AnnotationToolId } from "@/components/feedback/annotationTools";
@@ -11,6 +11,7 @@ interface AnnotationToolbarProps {
 const iconByTool: Record<AnnotationToolId, ComponentType<{ className?: string }>> = {
   select: MousePointer2,
   pin: MessageCircle,
+  pen: PenTool,
   arrow: ArrowUpRight,
   rectangle: Square,
   highlight: Highlighter,
@@ -18,7 +19,7 @@ const iconByTool: Record<AnnotationToolId, ComponentType<{ className?: string }>
   voice: Mic,
 };
 
-const disabledTools = new Set<AnnotationToolId>(["select", "text"]);
+const disabledTools = new Set<AnnotationToolId>(["voice"]);
 
 export function AnnotationToolbar({ activeTool: controlledTool, onToolChange }: AnnotationToolbarProps) {
   const [internalTool, setInternalTool] = useState<AnnotationToolId>("pin");

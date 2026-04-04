@@ -1,16 +1,16 @@
-import { useEffect, useMemo, useState, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type WheelEvent } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import {
   AnnotationToolbar,
 } from "@/components/feedback/AnnotationToolbar";
-import { drawableTools, type AnnotationToolId } from "@/components/feedback/annotationTools";
+import { type AnnotationToolId } from "@/components/feedback/annotationTools";
 import { CommentCard } from "@/components/feedback/CommentCard";
 import { ShareLinkCard } from "@/components/feedback/ShareLinkCard";
 import { AssetPreview } from "@/components/feedback/AssetPreview";
 import { FabricAnnotationLayer } from "@/components/feedback/FabricAnnotationLayer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Share2, Save, ChevronLeft, Plus } from "lucide-react";
+import { Share2, Save, ChevronLeft, Plus, ZoomIn, ZoomOut } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { DEMO_PROJECT_ID, normalizeProjectId, routePaths } from "@/lib/routePaths";
 import { feedbackGateway } from "@/services/feedbackGateway";
@@ -24,20 +24,16 @@ export default function EditorPage() {
   const [assetUrl, setAssetUrl] = useState("");
   const [comments, setComments] = useState<CommentView[]>([]);
   const [shareToken, setShareToken] = useState<string | null>(null);
-  const [isAddingComment, setIsAddingComment] = useState(false);
   const [activeTool, setActiveTool] = useState<AnnotationToolId>("pin");
   const [draftComment, setDraftComment] = useState("");
   const [draftGeometry, setDraftGeometry] = useState<{
     x: number;
     y: number;
-    width?: number;
-    height?: number;
     page?: number;
   } | null>(null);
-  const [isDrawingShape, setIsDrawingShape] = useState(false);
-  const [drawingStart, setDrawingStart] = useState<{ x: number; y: number } | null>(null);
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState(1);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [editorMessage, setEditorMessage] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -46,7 +42,7 @@ export default function EditorPage() {
 
   const resolvedProjectId = normalizeProjectId(projectId ?? DEMO_PROJECT_ID);
   const stateProjectName = (location.state as { projectName?: string } | null)?.projectName;
-  const draftShapeTool = drawableTools.includes(activeTool) ? activeTool : "pin";
+  const isCommentMode = activeTool === "pin";
   const visibleComments = useMemo(() => {
     if (assetType !== "pdf") {
       return comments;
@@ -59,6 +55,16 @@ export default function EditorPage() {
     return routePaths.review(shareToken ?? `share-${resolvedProjectId}`);
   }, [resolvedProjectId, shareToken]);
   const shareLink = useMemo(() => `${window.location.origin}${reviewPath}`, [reviewPath]);
+
+  const clampZoom = (value: number) => Math.max(0.5, Math.min(3, value));
+
+  const applyZoom = (nextZoom: number) => {
+    setZoomLevel(clampZoom(nextZoom));
+  };
+
+  const stepZoom = (delta: number) => {
+    setZoomLevel((current) => clampZoom(Number((current + delta).toFixed(2))));
+  };
 
   useEffect(() => {
     if (projectId && projectId !== resolvedProjectId) {
@@ -120,10 +126,31 @@ export default function EditorPage() {
   }, [assetType]);
 
   useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.metaKey && !event.ctrlKey) {
+        return;
+      }
+
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        setZoomLevel((current) => clampZoom(Number((current + 0.1).toFixed(2))));
+      } else if (event.key === "-" || event.key === "_") {
+        event.preventDefault();
+        setZoomLevel((current) => clampZoom(Number((current - 0.1).toFixed(2))));
+      } else if (event.key === "0") {
+        event.preventDefault();
+        setZoomLevel(1);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
     setDraftGeometry(null);
-    setDrawingStart(null);
-    setIsDrawingShape(false);
-  }, [draftShapeTool]);
+    setDraftComment("");
+  }, [activeTool]);
 
   const applyNextComments = (nextComments: CommentView[]) => {
     setComments(nextComments);
@@ -169,7 +196,7 @@ export default function EditorPage() {
   };
 
   const handleCanvasClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (!isAddingComment || draftShapeTool !== "pin") {
+    if (!isCommentMode) {
       return;
     }
 
@@ -181,89 +208,13 @@ export default function EditorPage() {
     });
   };
 
-  const handleCanvasPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (!isAddingComment || draftShapeTool === "pin") {
+  const handleCanvasWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey && !event.metaKey) {
       return;
     }
 
-    event.currentTarget.setPointerCapture(event.pointerId);
-
-    const point = getCanvasPoint(event);
-    setDrawingStart(point);
-    setIsDrawingShape(true);
-    setDraftGeometry({
-      x: point.x,
-      y: point.y,
-      width: draftShapeTool === "arrow" ? 0 : 1,
-      height: draftShapeTool === "arrow" ? 0 : 1,
-      page: assetType === "pdf" ? currentPdfPage : undefined,
-    });
-  };
-
-  const handleCanvasPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (!isDrawingShape || !drawingStart || !isAddingComment || draftShapeTool === "pin") {
-      return;
-    }
-
-    const current = getCanvasPoint(event);
-
-    if (draftShapeTool === "arrow") {
-      setDraftGeometry({
-        x: drawingStart.x,
-        y: drawingStart.y,
-        width: current.x - drawingStart.x,
-        height: current.y - drawingStart.y,
-        page: assetType === "pdf" ? currentPdfPage : undefined,
-      });
-      return;
-    }
-
-    const xMin = Math.min(drawingStart.x, current.x);
-    const xMax = Math.max(drawingStart.x, current.x);
-    const yMin = Math.min(drawingStart.y, current.y);
-    const yMax = Math.max(drawingStart.y, current.y);
-
-    setDraftGeometry({
-      x: (xMin + xMax) / 2,
-      y: (yMin + yMax) / 2,
-      width: Math.max(xMax - xMin, 1),
-      height: Math.max(yMax - yMin, 1),
-      page: assetType === "pdf" ? currentPdfPage : undefined,
-    });
-  };
-
-  const handleCanvasPointerUp = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-
-    if (!isDrawingShape) {
-      return;
-    }
-
-    setIsDrawingShape(false);
-    setDrawingStart(null);
-
-    setDraftGeometry((current) => {
-      if (!current) {
-        return current;
-      }
-
-      if (draftShapeTool === "arrow") {
-        const width = current.width ?? 0;
-        const height = current.height ?? 0;
-        if (Math.abs(width) < 0.8 && Math.abs(height) < 0.8) {
-          return { ...current, width: 8, height: -6 };
-        }
-        return current;
-      }
-
-      return {
-        ...current,
-        width: Math.max(current.width ?? 1, 1),
-        height: Math.max(current.height ?? 1, 1),
-      };
-    });
+    event.preventDefault();
+    stepZoom(event.deltaY < 0 ? 0.1 : -0.1);
   };
 
   const handleSubmitComment = async () => {
@@ -278,19 +229,14 @@ export default function EditorPage() {
       content,
       x: draftGeometry.x,
       y: draftGeometry.y,
-      width: draftGeometry.width,
-      height: draftGeometry.height,
       page: draftGeometry.page,
       authorName: "You",
-      shapeType: draftShapeTool,
+      shapeType: "pin",
     });
 
     applyNextComments(nextComments);
     setDraftComment("");
     setDraftGeometry(null);
-    setDrawingStart(null);
-    setIsDrawingShape(false);
-    setIsAddingComment(false);
     setEditorMessage(null);
     setActiveComment(nextComments[nextComments.length - 1]?.id ?? null);
   };
@@ -336,20 +282,36 @@ export default function EditorPage() {
             activeTool={activeTool}
             onToolChange={(tool) => {
               setActiveTool(tool);
-
-              if (drawableTools.includes(tool) || tool === "voice") {
-                setIsAddingComment(true);
-                setEditorMessage(null);
-                return;
-              }
-
-              setIsAddingComment(false);
-              setDraftGeometry(null);
-              setDrawingStart(null);
-              setIsDrawingShape(false);
-              setEditorMessage("Select pin / arrow / rectangle / highlight to add annotations.");
+              setEditorMessage(
+                tool === "pin"
+                  ? "Click on the canvas to place a comment pin."
+                  : tool === "voice"
+                    ? "Voice tool is a placeholder in MVP."
+                    : "Draw directly on the canvas.",
+              );
             }}
           />
+          <div className="inline-flex items-center rounded-lg border border-border/60">
+            <button
+              type="button"
+              className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={() => stepZoom(-0.1)}
+              title="Zoom out (Ctrl/Cmd + -)"
+            >
+              <ZoomOut className="h-3.5 w-3.5" />
+            </button>
+            <span className="min-w-[52px] px-2 text-center text-[11px] text-muted-foreground">
+              {Math.round(zoomLevel * 100)}%
+            </span>
+            <button
+              type="button"
+              className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={() => stepZoom(0.1)}
+              title="Zoom in (Ctrl/Cmd + +)"
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </button>
+          </div>
           <span className="h-4 w-px bg-border" />
           <Button
             variant="ghost"
@@ -379,28 +341,18 @@ export default function EditorPage() {
             <button
               className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               onClick={() => {
-                setIsAddingComment((prev) => {
-                  const next = !prev;
-                  if (!next) {
-                    setDraftGeometry(null);
-                    setDrawingStart(null);
-                    setIsDrawingShape(false);
-                  }
-                  return next;
-                });
-                setEditorMessage(null);
+                setActiveTool("pin");
+                setEditorMessage("Click on the canvas to place a comment pin.");
               }}
               title="Add comment"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
           </div>
-          {isAddingComment && (
+          {isCommentMode && (
             <div className="space-y-2 border-b border-border/60 px-3 pb-3">
               <p className="text-[12px] text-muted-foreground">
-                {draftShapeTool === "pin"
-                  ? "Click on the canvas to place a pin, then write your comment."
-                  : "Drag on the canvas to draw the annotation area, then write your comment."}
+                Click on the canvas to place a pin, then write your comment.
               </p>
               {activeTool === "voice" && (
                 <p className="text-[12px] text-muted-foreground">
@@ -427,11 +379,9 @@ export default function EditorPage() {
                   variant="outline"
                   className="h-8 flex-1 text-[12px]"
                   onClick={() => {
-                    setIsAddingComment(false);
                     setDraftComment("");
                     setDraftGeometry(null);
-                    setDrawingStart(null);
-                    setIsDrawingShape(false);
+                    setActiveTool("select");
                   }}
                 >
                   Cancel
@@ -468,89 +418,48 @@ export default function EditorPage() {
           <div className="mx-auto aspect-[16/10] max-w-4xl rounded-xl border border-border/60 bg-card">
             <div
               className={`relative h-full w-full rounded-xl bg-gradient-to-br from-muted/30 to-background ${
-                isAddingComment ? "cursor-crosshair" : ""
+                isCommentMode ? "cursor-crosshair" : ""
               }`}
-              onPointerDown={handleCanvasPointerDown}
-              onPointerMove={handleCanvasPointerMove}
-              onPointerUp={handleCanvasPointerUp}
-              onPointerCancel={handleCanvasPointerUp}
+              onWheel={handleCanvasWheel}
               onClick={handleCanvasClick}
             >
-              <div className={isAddingComment ? "pointer-events-none h-full w-full" : "h-full w-full"}>
-                <AssetPreview
-                  assetType={assetType}
-                  assetUrl={assetUrl}
-                  page={assetType === "pdf" ? currentPdfPage : undefined}
-                  onPageChange={assetType === "pdf" ? setCurrentPdfPage : undefined}
-                  onPageCountChange={assetType === "pdf" ? setPdfPageCount : undefined}
-                />
-              </div>
-              <FabricAnnotationLayer comments={visibleComments} activeCommentId={activeComment} />
-              {visibleComments.map((comment) => (
-                <button
-                  key={comment.id}
-                  className={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[11px] font-semibold transition-all duration-200 ${
-                    activeComment === comment.id
-                      ? "scale-125 bg-primary text-primary-foreground ring-[3px] ring-primary/15"
-                      : "bg-primary/80 text-primary-foreground hover:scale-110"
-                  }`}
-                  style={{ left: `${comment.x}%`, top: `${comment.y}%` }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setActiveComment(comment.id);
-                  }}
-                >
-                  {comment.pinNumber}
-                </button>
-              ))}
-              {isAddingComment && draftGeometry && draftShapeTool === "pin" && (
-                <div
-                  className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground ring-[3px] ring-primary/15"
-                  style={{ left: `${draftGeometry.x}%`, top: `${draftGeometry.y}%` }}
-                >
-                  +
-                </div>
-              )}
-              {isAddingComment && draftGeometry && (draftShapeTool === "rectangle" || draftShapeTool === "highlight") && (
-                <div
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-md border-2 ${
-                    draftShapeTool === "highlight"
-                      ? "border-amber-400 bg-amber-300/25"
-                      : "border-primary/80 bg-primary/10"
-                  }`}
-                  style={{
-                    left: `${draftGeometry.x}%`,
-                    top: `${draftGeometry.y}%`,
-                    width: `${Math.max(draftGeometry.width ?? 1, 1)}%`,
-                    height: `${Math.max(draftGeometry.height ?? 1, 1)}%`,
-                  }}
-                />
-              )}
-              {isAddingComment && draftGeometry && draftShapeTool === "arrow" && (
-                <svg className="pointer-events-none absolute inset-0 h-full w-full">
-                  <defs>
-                    <marker
-                      id="draft-arrow-head"
-                      markerWidth="8"
-                      markerHeight="8"
-                      refX="6"
-                      refY="3"
-                      orient="auto"
-                    >
-                      <polygon points="0 0, 6 3, 0 6" fill="#4f46e5" />
-                    </marker>
-                  </defs>
-                  <line
-                    x1={`${draftGeometry.x}%`}
-                    y1={`${draftGeometry.y}%`}
-                    x2={`${draftGeometry.x + (draftGeometry.width ?? 0)}%`}
-                    y2={`${draftGeometry.y + (draftGeometry.height ?? 0)}%`}
-                    stroke="#4f46e5"
-                    strokeWidth="2.5"
-                    markerEnd="url(#draft-arrow-head)"
+              <div className="h-full w-full overflow-auto">
+                <div className="relative h-full w-full" style={{ zoom: zoomLevel }}>
+                  <AssetPreview
+                    assetType={assetType}
+                    assetUrl={assetUrl}
+                    page={assetType === "pdf" ? currentPdfPage : undefined}
+                    onPageChange={assetType === "pdf" ? setCurrentPdfPage : undefined}
+                    onPageCountChange={assetType === "pdf" ? setPdfPageCount : undefined}
                   />
-                </svg>
-              )}
+                  <FabricAnnotationLayer activeTool={activeTool} disabled={isCommentMode} />
+                  {visibleComments.map((comment) => (
+                    <button
+                      key={comment.id}
+                      className={`absolute z-10 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[11px] font-semibold transition-all duration-200 ${
+                        activeComment === comment.id
+                          ? "scale-125 bg-primary text-primary-foreground ring-[3px] ring-primary/15"
+                          : "bg-primary/80 text-primary-foreground hover:scale-110"
+                      }`}
+                      style={{ left: `${comment.x}%`, top: `${comment.y}%` }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setActiveComment(comment.id);
+                      }}
+                    >
+                      {comment.pinNumber}
+                    </button>
+                  ))}
+                  {isCommentMode && draftGeometry && (
+                    <div
+                      className="absolute z-10 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground ring-[3px] ring-primary/15"
+                      style={{ left: `${draftGeometry.x}%`, top: `${draftGeometry.y}%` }}
+                    >
+                      +
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
           {assetType === "pdf" && (
