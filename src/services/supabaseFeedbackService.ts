@@ -86,6 +86,13 @@ type CreateReplyInput = {
   content: string;
 };
 
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string): boolean {
+  return uuidPattern.test(value);
+}
+
 function toSafeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
@@ -262,6 +269,10 @@ export const supabaseFeedbackService = {
   },
 
   async getProject(projectId: string): Promise<ProjectRecord | null> {
+    if (!isUuid(projectId)) {
+      return null;
+    }
+
     const db = assertSupabase();
 
     const { data, error } = await db.from("projects").select("*").eq("id", projectId).maybeSingle();
@@ -278,7 +289,7 @@ export const supabaseFeedbackService = {
     const now = getNowIso();
 
     const payload = {
-      id: input.id ?? crypto.randomUUID(),
+      id: input.id && isUuid(input.id) ? input.id : crypto.randomUUID(),
       title: input.title,
       owner_id: input.ownerId ?? "owner-demo",
       asset_type: input.assetType,

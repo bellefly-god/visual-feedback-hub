@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Share2, Save, ChevronLeft, Plus } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { DEMO_PROJECT_ID, routePaths } from "@/lib/routePaths";
+import { DEMO_PROJECT_ID, normalizeProjectId, routePaths } from "@/lib/routePaths";
 import { feedbackGateway } from "@/services/feedbackGateway";
 import type { CommentView } from "@/types/feedback";
 
@@ -44,7 +44,7 @@ export default function EditorPage() {
   const location = useLocation();
   const { projectId } = useParams<{ projectId: string }>();
 
-  const resolvedProjectId = projectId ?? DEMO_PROJECT_ID;
+  const resolvedProjectId = normalizeProjectId(projectId ?? DEMO_PROJECT_ID);
   const stateProjectName = (location.state as { projectName?: string } | null)?.projectName;
   const draftShapeTool = drawableTools.includes(activeTool) ? activeTool : "pin";
   const visibleComments = useMemo(() => {
@@ -59,6 +59,12 @@ export default function EditorPage() {
     return routePaths.review(shareToken ?? `share-${resolvedProjectId}`);
   }, [resolvedProjectId, shareToken]);
   const shareLink = useMemo(() => `${window.location.origin}${reviewPath}`, [reviewPath]);
+
+  useEffect(() => {
+    if (projectId && projectId !== resolvedProjectId) {
+      navigate(routePaths.editor(resolvedProjectId), { replace: true });
+    }
+  }, [navigate, projectId, resolvedProjectId]);
 
   useEffect(() => {
     let isMounted = true;
