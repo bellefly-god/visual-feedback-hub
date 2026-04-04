@@ -1,20 +1,47 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { ProjectCard } from "@/components/feedback/ProjectCard";
-import { mockProjects } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { routePaths } from "@/lib/routePaths";
+import { feedbackGateway } from "@/services/feedbackGateway";
+import type { ProjectListItem } from "@/types/feedback";
 
 const filters = ["All", "Pending", "Fixed", "Approved"] as const;
 
 export default function DashboardPage() {
   const [activeFilter, setActiveFilter] = useState<string>("All");
+  const [projects, setProjects] = useState<ProjectListItem[]>([]);
 
-  const filtered = activeFilter === "All"
-    ? mockProjects
-    : mockProjects.filter((p) => p.status === activeFilter.toLowerCase());
+  useEffect(() => {
+    let isMounted = true;
+
+    const load = async () => {
+      const nextProjects = await feedbackGateway.listProjects();
+
+      if (!isMounted) {
+        return;
+      }
+
+      setProjects(nextProjects);
+    };
+
+    void load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (activeFilter === "All") {
+      return projects;
+    }
+
+    return projects.filter((project) => project.status === activeFilter.toLowerCase());
+  }, [activeFilter, projects]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -26,7 +53,7 @@ export default function DashboardPage() {
             <p className="mt-1 text-[13px] text-muted-foreground">Your feedback projects.</p>
           </div>
           <Button size="sm" className="h-8 rounded-lg text-[13px]" asChild>
-            <Link to="/upload">
+            <Link to={routePaths.upload}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               New Project
             </Link>

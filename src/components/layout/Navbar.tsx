@@ -1,12 +1,13 @@
 import { Link, useLocation } from "react-router-dom";
-import { MessageSquare, Plus } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { DEMO_PROJECT_ID, routePaths } from "@/lib/routePaths";
 
 const navLinks = [
-  { label: "Dashboard", path: "/dashboard" },
-  { label: "New Project", path: "/upload" },
-  { label: "Demo", path: "/editor" },
+  { label: "Dashboard", path: routePaths.dashboard },
+  { label: "New Project", path: routePaths.upload },
+  { label: "Demo", path: routePaths.editor(DEMO_PROJECT_ID) },
 ];
 
 export function Navbar() {
@@ -29,7 +30,8 @@ export function Navbar() {
               to={link.path}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors",
-                location.pathname === link.path
+                (location.pathname === link.path ||
+                  (link.label === "Demo" && location.pathname.startsWith("/editor/")))
                   ? "text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               )}
@@ -44,7 +46,7 @@ export function Navbar() {
             Sign In
           </button>
           <Button size="sm" className="h-8 rounded-lg text-[13px]" asChild>
-            <Link to="/upload">
+            <Link to={routePaths.upload}>
               Start Free
             </Link>
           </Button>

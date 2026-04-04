@@ -1,7 +1,8 @@
 import { FileImage, FileText, Monitor, MessageSquare } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
-import type { Project } from "@/data/mockData";
+import type { ProjectListItem } from "@/types/feedback";
 import { Link } from "react-router-dom";
+import { routePaths } from "@/lib/routePaths";
 
 const fileIcons = {
   image: FileImage,
@@ -9,12 +10,12 @@ const fileIcons = {
   screenshot: Monitor,
 };
 
-export function ProjectCard({ project }: { project: Project }) {
+export function ProjectCard({ project }: { project: ProjectListItem }) {
   const Icon = fileIcons[project.fileType];
 
   return (
     <Link
-      to="/editor"
+      to={routePaths.editor(project.id)}
       className="group block rounded-xl border border-border/60 bg-card p-5 transition-all duration-200 hover:border-border"
     >
       <div className="mb-4 flex h-28 items-center justify-center rounded-lg bg-muted/40">

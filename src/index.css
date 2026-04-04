@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .glass-card {
+    @apply rounded-xl border border-border/60 bg-card;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 99%;

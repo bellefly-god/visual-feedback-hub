@@ -3,6 +3,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Eye } from "lucide-react";
 import { motion } from "framer-motion";
+import { DEMO_PROJECT_ID, routePaths } from "@/lib/routePaths";
 
 const fade = (delay: number) => ({
   hidden: { opacity: 0, y: 12 },
@@ -52,13 +53,13 @@ export default function LandingPage() {
           variants={fade(0.24)} initial="hidden" animate="visible"
         >
           <Button size="lg" className="h-11 rounded-xl px-6 text-[14px]" asChild>
-            <Link to="/upload">
+            <Link to={routePaths.upload}>
               Start a Feedback Project
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
           <Button size="lg" variant="ghost" className="h-11 rounded-xl px-6 text-[14px] text-muted-foreground" asChild>
-            <Link to="/editor">
+            <Link to={routePaths.editor(DEMO_PROJECT_ID)}>
               <Eye className="mr-2 h-4 w-4" />
               See Demo
             </Link>
@@ -129,7 +130,7 @@ export default function LandingPage() {
             Start your first project in under a minute. Free to try.
           </p>
           <Button size="lg" className="mt-6 h-11 rounded-xl px-6 text-[14px]" asChild>
-            <Link to="/upload">
+            <Link to={routePaths.upload}>
               Get Started
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

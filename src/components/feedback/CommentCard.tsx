@@ -1,10 +1,10 @@
 import { MessageCircle } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
-import type { Comment } from "@/data/mockData";
+import type { CommentView } from "@/types/feedback";
 import { cn } from "@/lib/utils";
 
 interface CommentCardProps {
-  comment: Comment;
+  comment: CommentView;
   isActive?: boolean;
   onClick?: () => void;
   showReplies?: boolean;

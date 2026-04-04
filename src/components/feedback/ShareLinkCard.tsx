@@ -2,13 +2,19 @@ import { Copy, Check, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { DEMO_REVIEW_TOKEN, routePaths } from "@/lib/routePaths";
 
 interface ShareLinkCardProps {
   link?: string;
+  reviewPath?: string;
   onClose?: () => void;
 }
 
-export function ShareLinkCard({ link = "https://feedbackmark.co/review/abc123", onClose }: ShareLinkCardProps) {
+export function ShareLinkCard({
+  link = "https://feedbackmark.co/review/abc123",
+  reviewPath = routePaths.review(DEMO_REVIEW_TOKEN),
+  onClose,
+}: ShareLinkCardProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -37,7 +43,7 @@ export function ShareLinkCard({ link = "https://feedbackmark.co/review/abc123", 
           Close
         </Button>
         <Button className="flex-1 h-9 text-[13px]" asChild>
-          <Link to="/review">
+          <Link to={reviewPath}>
             <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
             Open Review
           </Link>

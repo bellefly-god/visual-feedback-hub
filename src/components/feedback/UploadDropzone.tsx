@@ -1,14 +1,37 @@
 import { useState, useCallback } from "react";
 import { Upload, FileImage, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { validateUploadFile } from "@/lib/file";
 
 interface UploadDropzoneProps {
   onFileSelect?: (file: File) => void;
+  onFileClear?: () => void;
+  onValidationError?: (message: string | null) => void;
 }
 
-export function UploadDropzone({ onFileSelect }: UploadDropzoneProps) {
+export function UploadDropzone({ onFileSelect, onFileClear, onValidationError }: UploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const assignFile = useCallback(
+    (nextFile: File) => {
+      const validationMessage = validateUploadFile(nextFile);
+      if (validationMessage) {
+        setFile(null);
+        setErrorMessage(validationMessage);
+        onValidationError?.(validationMessage);
+        onFileClear?.();
+        return;
+      }
+
+      setFile(nextFile);
+      setErrorMessage(null);
+      onValidationError?.(null);
+      onFileSelect?.(nextFile);
+    },
+    [onFileClear, onFileSelect, onValidationError],
+  );
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -21,16 +44,14 @@ export function UploadDropzone({ onFileSelect }: UploadDropzoneProps) {
     setIsDragging(false);
     const dropped = e.dataTransfer.files[0];
     if (dropped) {
-      setFile(dropped);
-      onFileSelect?.(dropped);
+      assignFile(dropped);
     }
-  }, [onFileSelect]);
+  }, [assignFile]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (selected) {
-      setFile(selected);
-      onFileSelect?.(selected);
+      assignFile(selected);
     }
   };
 
@@ -45,7 +66,12 @@ export function UploadDropzone({ onFileSelect }: UploadDropzoneProps) {
           <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
         </div>
         <button
-          onClick={() => setFile(null)}
+          onClick={() => {
+            setFile(null);
+            setErrorMessage(null);
+            onValidationError?.(null);
+            onFileClear?.();
+          }}
           className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <X className="h-4 w-4" />
@@ -55,26 +81,29 @@ export function UploadDropzone({ onFileSelect }: UploadDropzoneProps) {
   }
 
   return (
-    <label
-      onDragEnter={handleDrag}
-      onDragOver={handleDrag}
-      onDragLeave={handleDrag}
-      onDrop={handleDrop}
-      className={cn(
-        "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-all duration-200",
-        isDragging
-          ? "border-primary bg-primary/5"
-          : "border-border bg-card hover:border-primary/30 hover:bg-primary/[0.02]"
-      )}
-    >
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-        <Upload className="h-6 w-6 text-primary" />
-      </div>
-      <p className="mb-1 text-sm font-medium text-foreground">
-        Drop your file here, or <span className="text-primary">browse</span>
-      </p>
-      <p className="text-xs text-muted-foreground">PNG, JPG, PDF up to 25MB</p>
-      <input type="file" accept="image/*,.pdf" onChange={handleChange} className="hidden" />
-    </label>
+    <div className="space-y-2">
+      <label
+        onDragEnter={handleDrag}
+        onDragOver={handleDrag}
+        onDragLeave={handleDrag}
+        onDrop={handleDrop}
+        className={cn(
+          "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-all duration-200",
+          isDragging
+            ? "border-primary bg-primary/5"
+            : "border-border bg-card hover:border-primary/30 hover:bg-primary/[0.02]"
+        )}
+      >
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+          <Upload className="h-6 w-6 text-primary" />
+        </div>
+        <p className="mb-1 text-sm font-medium text-foreground">
+          Drop your file here, or <span className="text-primary">browse</span>
+        </p>
+        <p className="text-xs text-muted-foreground">PNG, JPG, WebP, GIF, BMP, SVG, PDF up to 25MB</p>
+        <input type="file" accept="image/*,.pdf" onChange={handleChange} className="hidden" />
+      </label>
+      {errorMessage && <p className="text-xs text-destructive">{errorMessage}</p>}
+    </div>
   );
 }
