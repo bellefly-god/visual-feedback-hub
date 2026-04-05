@@ -8,6 +8,7 @@ import { useParams } from "react-router-dom";
 import { DEMO_REVIEW_TOKEN } from "@/lib/routePaths";
 import { feedbackGateway } from "@/services/feedbackGateway";
 import type { CommentView } from "@/types/feedback";
+import { AnnotationCanvas, type NormalizedAnnotation } from "@/components/feedback/editor/AnnotationCanvas";
 
 export default function ReviewPage() {
   const [activeComment, setActiveComment] = useState<string | null>(null);
@@ -19,7 +20,14 @@ export default function ReviewPage() {
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState(1);
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
+  const isDebugEnabled = import.meta.env.DEV;
   const { token } = useParams<{ token: string }>();
+
+  const debugLog = (...args: unknown[]) => {
+    if (isDebugEnabled) {
+      console.log("[ReviewPage]", ...args);
+    }
+  };
 
   const reviewToken = token ?? DEMO_REVIEW_TOKEN;
   const visibleComments = useMemo(() => {
@@ -29,6 +37,19 @@ export default function ReviewPage() {
 
     return comments.filter((comment) => (comment.page ?? 1) === currentPdfPage);
   }, [assetType, comments, currentPdfPage]);
+  const visibleAnnotations = useMemo<NormalizedAnnotation[]>(
+    () =>
+      visibleComments.map((comment) => ({
+        id: comment.id,
+        shapeType: comment.shapeType,
+        x: comment.x,
+        y: comment.y,
+        width: comment.width,
+        height: comment.height,
+        pinNumber: comment.pinNumber,
+      })),
+    [visibleComments],
+  );
   const active = visibleComments.find((c) => c.id === activeComment);
 
   const applyNextComments = (nextComments: CommentView[]) => {
@@ -179,23 +200,16 @@ export default function ReviewPage() {
                 onPageChange={assetType === "pdf" ? setCurrentPdfPage : undefined}
                 onPageCountChange={assetType === "pdf" ? setPdfPageCount : undefined}
               />
-              {visibleComments.map((comment) => (
-                <button
-                  key={comment.id}
-                  className={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[11px] font-semibold transition-all duration-200 ${
-                    activeComment === comment.id
-                      ? "scale-125 bg-primary text-primary-foreground ring-[3px] ring-primary/15"
-                      : "bg-primary/80 text-primary-foreground hover:scale-110"
-                  }`}
-                  style={{ left: `${comment.x}%`, top: `${comment.y}%` }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setActiveComment(comment.id);
-                  }}
-                >
-                  {comment.pinNumber}
-                </button>
-              ))}
+              <AnnotationCanvas
+                mode="review"
+                toolMode="select"
+                annotations={visibleAnnotations}
+                selectedAnnotationId={activeComment}
+                onSelectAnnotation={(annotationId) => {
+                  debugLog("selection changed", { selectedAnnotationId: annotationId });
+                  setActiveComment(annotationId);
+                }}
+              />
             </div>
           </div>
           {assetType === "pdf" && (
@@ -219,7 +233,10 @@ export default function ReviewPage() {
                 key={comment.id}
                 comment={comment}
                 isActive={activeComment === comment.id}
-                onClick={() => setActiveComment(comment.id)}
+                onClick={() => {
+                  debugLog("selection changed", { selectedAnnotationId: comment.id });
+                  setActiveComment(comment.id);
+                }}
                 showReplies={activeComment === comment.id}
               />
             ))}

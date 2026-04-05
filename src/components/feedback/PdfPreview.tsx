@@ -48,7 +48,7 @@ export function PdfPreview({ src, page = 1, onPageChange, onPageCountChange }: P
       void loadingTask.destroy();
       pdfRef.current = null;
     };
-  }, [src, onPageChange, onPageCountChange]);
+  }, [src, onPageCountChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,9 +114,7 @@ export function PdfPreview({ src, page = 1, onPageChange, onPageCountChange }: P
           <p className="text-[12px] text-muted-foreground">Unable to render PDF preview.</p>
         </div>
       )}
-      <div className="h-full w-full overflow-auto p-4">
-        <canvas ref={canvasRef} className="mx-auto max-w-full rounded-md bg-card" />
-      </div>
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full bg-card" />
       <div className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-md border border-border/70 bg-card/95 px-2 py-1 text-[11px] shadow-sm backdrop-blur">
         <button
           type="button"
