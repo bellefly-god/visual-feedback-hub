@@ -1,6 +1,6 @@
 import type { AnnotationShape } from "@/types/feedback";
 
-export type ToolMode = "select" | "pin" | "arrow" | "rectangle" | "highlight";
+export type ToolMode = "select" | "pin" | "pen" | "arrow" | "rectangle" | "highlight";
 
 export type AnnotationShapeMode = Exclude<ToolMode, "select">;
 
@@ -26,5 +26,6 @@ export interface CreateAnnotationPayload {
   y: number;
   width?: number;
   height?: number;
+  pathPoints?: Array<{ x: number; y: number }>;
   color?: string;
 }

@@ -1,10 +1,19 @@
 # FeedbackMark 系统功能说明（MVP）
 
 ## 1. 文档信息
-- 文档版本：v1.0
-- 更新时间：2026-04-04
+- 文档版本：v1.1
+- 更新时间：2026-04-06
 - 适用范围：FeedbackMark Web 端 MVP
 - 目标读者：产品、设计、前端、后端、测试
+
+### 1.1 当前实现快照（2026-04-06）
+- 已落地双编辑器架构：`ImageEditor` 与 `PdfEditor` 分离实现。
+- 已弃用“单 Fabric 画布承载所有素材”的主路径，当前主路径为稳定 overlay 架构：
+  - 图片：`ImageStage + ImageAnnotationOverlay`
+  - PDF：`PdfPageCanvas + PdfAnnotationOverlay`
+- 标注工具当前实现支持：`select` / `pin` / `pen` / `arrow` / `rectangle` / `highlight`
+- 评论与标注通过统一 `selectedAnnotationId` 联动。
+- 坐标采用归一化存储（相对百分比），渲染时还原到当前视口。
 
 ## 2. 产品定位与目标
 FeedbackMark 是一个轻量级视觉反馈工具，面向 freelancer、设计师、营销人员和小团队。
@@ -27,6 +36,9 @@ MVP 只验证一个闭环：
 - 客户回复评论
 - 评论状态流转（`pending` / `fixed` / `approved`）
 - Dashboard 查看项目列表与状态筛选
+
+补充：
+- 当前实现已额外支持 `pen/freehand`，作为编辑体验增强项（不影响原 MVP 主流程）。
 
 ### 3.2 MVP 暂不做
 - Figma 集成
@@ -86,11 +98,11 @@ Dashboard 的项目状态由评论状态聚合得出：
 前置条件：项目和素材已创建。
 
 步骤：
-1. 用户在画布选择标注工具（pin/arrow/rectangle/highlight）。
-2. 用户在画布上落点或绘制区域，系统记录坐标与形状参数。
-3. 用户输入文字评论，可选附加语音说明。
-4. 用户点击 `Save feedback`。
-5. 系统保存 `Comment`（含位置、内容、状态初值 `pending`）。
+1. 用户在画布选择标注工具（`pin/pen/arrow/rectangle/highlight`）。
+2. 用户在画布上落点或绘制区域，系统立即创建“草稿标注”（含工具类型、几何、颜色、临时 ID）。
+3. 系统自动打开评论输入区。
+4. 用户输入文字评论，可选附加语音说明。
+5. 用户提交评论后，系统将文本附加到该草稿标注并保存为正式 `Comment`（状态初值 `pending`）。
 6. 页面左侧评论列表即时刷新；点击评论与画布标注双向高亮。
 
 结果：评论可被后续分享和评审。
@@ -298,12 +310,15 @@ type Project = {
 type Comment = {
   id: string;
   projectId: string;
+  displayOrder?: number; // 评论/标注稳定序号
   page?: number; // PDF 页码，非 PDF 可为空
   x: number;
   y: number;
   width?: number; // 矩形/高亮可用
   height?: number;
-  shapeType: "pin" | "arrow" | "rectangle" | "highlight";
+  pathPoints?: Array<{ x: number; y: number }>; // pen/freehand 路径点（归一化）
+  color?: string; // 标注颜色（持久化）
+  shapeType: "pin" | "pen" | "arrow" | "rectangle" | "highlight";
   content: string;
   voiceNoteUrl?: string;
   status: CommentStatus;
@@ -366,12 +381,15 @@ type ShareLink = {
 - Vite + React + TypeScript
 - Tailwind CSS + shadcn/ui
 - React Router（路由）
-- TanStack React Query（服务端状态缓存）
+- 当前主数据链路：`feedbackGateway`（Supabase 或 localStorage 双实现）
 
 ### 13.2 标注与预览
-- 标注层：Fabric.js（优先）
+- Image Editor：`ImageStage + SVG Overlay`（主路径）
+- PDF Editor：`PdfPageCanvas + SVG Overlay`（主路径）
 - PDF 预览：PDF.js
 - 图片预览：浏览器原生 + 标注覆盖层
+- 坐标体系：统一归一化存储，按当前渲染尺寸还原
+- 历史栈：编辑器内 `undo/redo`（仅 ImageEditor）
 
 ### 13.3 后端与数据
 - Supabase（Postgres + Storage）
@@ -389,3 +407,22 @@ type ShareLink = {
 - 语音说明第一版是否仅占位，还是允许上传音频文件。
 - 是否需要“评论删除”能力（MVP 可先不做）。
 - Dashboard 是否需要分页（MVP 可先不做）。
+
+## 16. 当前待修复问题（按优先级）
+### P0
+1. `ImageEditor` 的 redo 快照恢复缺陷：
+   - 现象：undo 后 redo 按钮可点击，历史前进，但 UI 未恢复被撤销标注。
+   - 影响：历史栈与画布/评论显示不一致。
+   - 责任模块：`src/components/feedback/editor/EditorController.tsx`（`handleRedo`）。
+
+### P1
+1. Supabase 线上库需确认 `comments.path_points` 列已存在：
+   - 若缺失会走兼容插入分支，pen 路径无法完整持久化。
+   - 处理方式：执行 `docs/supabase-schema.sql` 中的增量 `alter table` 语句。
+2. 旧 Fabric 相关文件仍在仓库（非主路径）：
+   - 如 `src/components/feedback/editor/AnnotationCanvas.tsx`。
+   - 风险：后续维护时易误用旧路径。
+   - 建议：后续做一次“非主路径归档/移除”清理。
+
+### P2
+1. `ImageEditor`/`PdfEditor` 的自动化 E2E 回归尚未固化进 CI（当前多为手工/临时脚本验证）。

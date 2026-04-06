@@ -22,8 +22,9 @@ create table if not exists public.comments (
   y double precision not null,
   width double precision,
   height double precision,
+  path_points jsonb,
   color text not null default '#2563eb',
-  shape_type text not null check (shape_type in ('pin','arrow','rectangle','highlight')),
+  shape_type text not null check (shape_type in ('pin','pen','arrow','rectangle','highlight')),
   content text not null,
   voice_note_url text,
   status text not null check (status in ('pending','fixed','approved')),
@@ -61,6 +62,9 @@ alter table public.comments
 
 alter table public.comments
   add column if not exists color text not null default '#2563eb';
+
+alter table public.comments
+  add column if not exists path_points jsonb;
 
 -- MVP mode: keep public access simple.
 alter table public.projects disable row level security;

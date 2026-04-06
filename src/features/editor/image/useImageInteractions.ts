@@ -16,6 +16,14 @@ type DragPreview = {
   current: { x: number; y: number };
 };
 
+type PenPreview = {
+  toolMode: "pen";
+  color: string;
+  points: Array<{ x: number; y: number }>;
+};
+
+type InteractionSession = DragPreview | PenPreview;
+
 interface UseImageInteractionsParams {
   mode: "editor" | "review";
   toolMode: ToolMode;
@@ -39,11 +47,11 @@ export function useImageInteractions({
   onSelectAnnotation,
   onCreateAnnotation,
 }: UseImageInteractionsParams) {
-  const dragRef = useRef<DragPreview | null>(null);
-  const [preview, setPreview] = useState<DragPreview | null>(null);
+  const sessionRef = useRef<InteractionSession | null>(null);
+  const [preview, setPreview] = useState<InteractionSession | null>(null);
 
   useEffect(() => {
-    dragRef.current = null;
+    sessionRef.current = null;
     setPreview(null);
   }, [activeColor, mode, toolMode, bounds?.x, bounds?.y, bounds?.width, bounds?.height]);
 
@@ -106,6 +114,45 @@ export function useImageInteractions({
     [bounds, onCreateAnnotation],
   );
 
+  const commitPenAnnotation = useCallback(
+    (session: PenPreview) => {
+      if (!bounds || !onCreateAnnotation) {
+        return;
+      }
+
+      const rawPoints = session.points.length > 0 ? session.points : [{ x: bounds.x, y: bounds.y }];
+      const stabilizedPoints = [...rawPoints];
+      if (stabilizedPoints.length === 1) {
+        const first = stabilizedPoints[0];
+        stabilizedPoints.push(
+          clampPointToBounds(
+            {
+              x: first.x + Math.max(bounds.width * 0.01, 8),
+              y: first.y,
+            },
+            bounds,
+          ),
+        );
+      }
+
+      const left = Math.min(...stabilizedPoints.map((point) => point.x));
+      const right = Math.max(...stabilizedPoints.map((point) => point.x));
+      const top = Math.min(...stabilizedPoints.map((point) => point.y));
+      const bottom = Math.max(...stabilizedPoints.map((point) => point.y));
+
+      onCreateAnnotation({
+        shapeType: "pen",
+        x: toPercent((left + right) / 2 - bounds.x, bounds.width),
+        y: toPercent((top + bottom) / 2 - bounds.y, bounds.height),
+        width: Math.max(toPercent(right - left, bounds.width), 1),
+        height: Math.max(toPercent(bottom - top, bounds.height), 1),
+        pathPoints: stabilizedPoints.map((point) => toNormalizedPoint(bounds, point)),
+        color: session.color,
+      });
+    },
+    [bounds, onCreateAnnotation],
+  );
+
   const handlers = useMemo(() => {
     const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) {
@@ -148,6 +195,19 @@ export function useImageInteractions({
         return;
       }
 
+      if (toolMode === "pen") {
+        const session: PenPreview = {
+          toolMode: "pen",
+          color: activeColor,
+          points: [clampedPoint],
+        };
+
+        sessionRef.current = session;
+        setPreview(session);
+        event.currentTarget.setPointerCapture(event.pointerId);
+        return;
+      }
+
       if (!isDragToolMode(toolMode)) {
         return;
       }
@@ -159,37 +219,60 @@ export function useImageInteractions({
         current: clampedPoint,
       };
 
-      dragRef.current = session;
+      sessionRef.current = session;
       setPreview(session);
       event.currentTarget.setPointerCapture(event.pointerId);
     };
 
     const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-      const session = dragRef.current;
+      const session = sessionRef.current;
       if (!session || !bounds) {
         return;
       }
 
       const point = readPoint(event);
       const clampedPoint = clampPointToBounds(point, bounds);
+
+      if (session.toolMode === "pen") {
+        const previous = session.points[session.points.length - 1];
+        const dx = clampedPoint.x - previous.x;
+        const dy = clampedPoint.y - previous.y;
+        if (Math.hypot(dx, dy) < 0.75) {
+          return;
+        }
+
+        const nextPenSession: PenPreview = {
+          ...session,
+          points: [...session.points, clampedPoint],
+        };
+        sessionRef.current = nextPenSession;
+        setPreview(nextPenSession);
+        return;
+      }
+
       const next = {
         ...session,
         current: clampedPoint,
       };
 
-      dragRef.current = next;
+      sessionRef.current = next;
       setPreview(next);
     };
 
     const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-      const session = dragRef.current;
+      const session = sessionRef.current;
       if (!session) {
         return;
       }
 
-      const point = readPoint(event);
-      commitDragAnnotation(session, point);
-      dragRef.current = null;
+      if (session.toolMode === "pen") {
+        commitPenAnnotation(session);
+      } else {
+        const point = readPoint(event);
+        commitDragAnnotation(session, point);
+      }
+
+      sessionRef.current = null;
       setPreview(null);
 
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -198,7 +281,7 @@ export function useImageInteractions({
     };
 
     const onPointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
-      dragRef.current = null;
+      sessionRef.current = null;
       setPreview(null);
 
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -212,7 +295,7 @@ export function useImageInteractions({
       onPointerUp,
       onPointerCancel,
     };
-  }, [activeColor, bounds, commitDragAnnotation, mode, onCreateAnnotation, onSelectAnnotation, readPoint, toolMode]);
+  }, [activeColor, bounds, commitDragAnnotation, commitPenAnnotation, mode, onCreateAnnotation, onSelectAnnotation, readPoint, toolMode]);
 
   return {
     preview,

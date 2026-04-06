@@ -2,7 +2,7 @@ export type AssetType = "image" | "pdf" | "screenshot";
 
 export type CommentStatus = "pending" | "fixed" | "approved";
 
-export type AnnotationShape = "pin" | "arrow" | "rectangle" | "highlight";
+export type AnnotationShape = "pin" | "pen" | "arrow" | "rectangle" | "highlight";
 
 export interface ProjectRecord {
   id: string;
@@ -24,6 +24,7 @@ export interface CommentRecord {
   width?: number;
   height?: number;
   color?: string;
+  pathPoints?: Array<{ x: number; y: number }>;
   shapeType: AnnotationShape;
   content: string;
   voiceNoteUrl?: string;
@@ -70,6 +71,7 @@ export interface CommentView {
   width?: number;
   height?: number;
   color?: string;
+  pathPoints?: Array<{ x: number; y: number }>;
   page?: number;
   pinNumber: number;
   replies: CommentReplyView[];

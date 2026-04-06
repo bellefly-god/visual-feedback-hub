@@ -23,10 +23,11 @@ type CreateCommentInput = {
   y: number;
   width?: number;
   height?: number;
+  pathPoints?: Array<{ x: number; y: number }>;
   color?: string;
   page?: number;
   authorName: string;
-  shapeType?: "pin" | "arrow" | "rectangle" | "highlight";
+  shapeType?: "pin" | "pen" | "arrow" | "rectangle" | "highlight";
 };
 
 type CreateReplyInput = {

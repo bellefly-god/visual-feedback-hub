@@ -35,6 +35,7 @@ interface CreateCommentInput {
   y: number;
   width?: number;
   height?: number;
+  pathPoints?: Array<{ x: number; y: number }>;
   color?: string;
   page?: number;
   authorName: string;
@@ -174,6 +175,7 @@ function toCommentViews(store: FeedbackStore, projectId: string): CommentView[] 
       y: comment.y,
       width: comment.width,
       height: comment.height,
+      pathPoints: comment.pathPoints,
       color: comment.color,
       page: comment.page,
       pinNumber: displayOrder,
@@ -303,6 +305,7 @@ export const feedbackService = {
       y: input.y,
       width: input.width,
       height: input.height,
+      pathPoints: input.pathPoints,
       color: input.color,
       shapeType: input.shapeType ?? "pin",
       content: input.content,

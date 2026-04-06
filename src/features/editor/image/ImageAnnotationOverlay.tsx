@@ -20,6 +20,14 @@ type DragPreview = {
   current: { x: number; y: number };
 };
 
+type PenPreview = {
+  toolMode: "pen";
+  color: string;
+  points: Array<{ x: number; y: number }>;
+};
+
+type InteractionPreview = DragPreview | PenPreview;
+
 interface ImageAnnotationOverlayProps {
   mode: "editor" | "review";
   toolMode: ToolMode;
@@ -27,7 +35,7 @@ interface ImageAnnotationOverlayProps {
   annotations: NormalizedAnnotation[];
   selectedAnnotationId: string | null;
   colors: AnnotationColorState;
-  preview: DragPreview | null;
+  preview: InteractionPreview | null;
   onSelectAnnotation: (annotationId: string | null) => void;
   onPointerDown: PointerEventHandler<HTMLDivElement>;
   onPointerMove: PointerEventHandler<HTMLDivElement>;
@@ -35,8 +43,32 @@ interface ImageAnnotationOverlayProps {
   onPointerCancel: PointerEventHandler<HTMLDivElement>;
 }
 
-function renderPreview(preview: DragPreview, colors: AnnotationColorState) {
+function renderPreview(preview: InteractionPreview, colors: AnnotationColorState) {
   const stroke = sanitizeAnnotationColor(preview.color || colors.stroke);
+
+  if (preview.toolMode === "pen") {
+    if (preview.points.length === 0) {
+      return null;
+    }
+
+    if (preview.points.length === 1) {
+      const point = preview.points[0];
+      return <circle cx={point.x} cy={point.y} r={2.5} fill={stroke} />;
+    }
+
+    const [first, ...rest] = preview.points;
+    const path = `M ${first.x} ${first.y} ${rest.map((point) => `L ${point.x} ${point.y}`).join(" ")}`;
+    return (
+      <path
+        d={path}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    );
+  }
 
   if (preview.toolMode === "arrow") {
     return (

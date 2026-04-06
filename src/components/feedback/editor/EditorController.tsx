@@ -406,6 +406,7 @@ export function EditorController() {
       y: pendingAnnotation.y,
       width: shapeType === "pin" ? undefined : pendingAnnotation.width,
       height: shapeType === "pin" ? undefined : pendingAnnotation.height,
+      pathPoints: pendingAnnotation.pathPoints,
       color: pendingAnnotation.color,
       page: pendingAnnotation.page,
       authorName: "You",

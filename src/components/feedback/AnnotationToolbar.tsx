@@ -1,4 +1,4 @@
-import { MousePointer2, MessageCircle, ArrowUpRight, Square, Highlighter, Redo2, Undo2 } from "lucide-react";
+import { MousePointer2, MessageCircle, ArrowUpRight, Square, Highlighter, PencilLine, Redo2, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ComponentType } from "react";
 import type { AnnotationToolId } from "@/components/feedback/annotationTools";
@@ -24,7 +24,7 @@ const iconByTool: Record<AnnotationToolId, ComponentType<{ className?: string }>
   arrow: ArrowUpRight,
   rectangle: Square,
   highlight: Highlighter,
-  pen: Square,
+  pen: PencilLine,
   text: Square,
   voice: Square,
 };
@@ -32,11 +32,12 @@ const iconByTool: Record<AnnotationToolId, ComponentType<{ className?: string }>
 const editorTools: Array<{ id: AnnotationToolId; label: string }> = [
   { id: "select", label: "Select" },
   { id: "pin", label: "Pin" },
+  { id: "pen", label: "Pen" },
   { id: "arrow", label: "Arrow" },
   { id: "rectangle", label: "Rectangle" },
   { id: "highlight", label: "Highlight" },
 ];
-const colorEnabledTools = new Set<AnnotationToolId>(["pin", "arrow", "rectangle", "highlight"]);
+const colorEnabledTools = new Set<AnnotationToolId>(["pin", "pen", "arrow", "rectangle", "highlight"]);
 
 export function AnnotationToolbar({
   activeTool: controlledTool,

@@ -30,8 +30,9 @@ type CommentRow = {
   y: number;
   width: number | null;
   height: number | null;
+  path_points: Array<{ x: number; y: number }> | null;
   color: string | null;
-  shape_type: "pin" | "arrow" | "rectangle" | "highlight";
+  shape_type: "pin" | "pen" | "arrow" | "rectangle" | "highlight";
   content: string;
   voice_note_url: string | null;
   status: CommentStatus;
@@ -77,10 +78,11 @@ type CreateCommentInput = {
   y: number;
   width?: number;
   height?: number;
+  pathPoints?: Array<{ x: number; y: number }>;
   color?: string;
   page?: number;
   authorName: string;
-  shapeType?: "pin" | "arrow" | "rectangle" | "highlight";
+  shapeType?: "pin" | "pen" | "arrow" | "rectangle" | "highlight";
 };
 
 type CreateReplyInput = {
@@ -143,6 +145,19 @@ function isMissingDisplayOrderColumnError(error: { code?: string; message?: stri
     error.code === "42703" ||
     (error.message?.toLowerCase().includes("column") === true &&
       error.message.toLowerCase().includes("display_order"))
+  );
+}
+
+function isMissingPathPointsColumnError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) {
+    return false;
+  }
+
+  return (
+    error.code === "PGRST204" ||
+    error.code === "42703" ||
+    (error.message?.toLowerCase().includes("column") === true &&
+      error.message.toLowerCase().includes("path_points"))
   );
 }
 
@@ -228,6 +243,7 @@ function toCommentView(comment: CommentRow, displayOrder: number, replies: Reply
     y: comment.y,
     width: comment.width ?? undefined,
     height: comment.height ?? undefined,
+    pathPoints: comment.path_points ?? undefined,
     color: comment.color ?? undefined,
     page: comment.page ?? undefined,
     pinNumber: displayOrder,
@@ -429,6 +445,7 @@ export const supabaseFeedbackService = {
       y: input.y,
       width: input.width ?? null,
       height: input.height ?? null,
+      path_points: input.pathPoints ?? null,
       color: input.color ?? null,
       shape_type: input.shapeType ?? "pin",
       content: input.content,
@@ -439,9 +456,15 @@ export const supabaseFeedbackService = {
     };
 
     let { error } = await db.from("comments").insert(payload);
-    if (isMissingColorColumnError(error) || isMissingDisplayOrderColumnError(error) || !supportsDisplayOrder) {
-      const legacyPayload: Omit<typeof payload, "color" | "display_order"> & {
+    if (
+      isMissingColorColumnError(error) ||
+      isMissingDisplayOrderColumnError(error) ||
+      isMissingPathPointsColumnError(error) ||
+      !supportsDisplayOrder
+    ) {
+      const legacyPayload: Omit<typeof payload, "color" | "display_order" | "path_points"> & {
         color?: string | null;
+        path_points?: Array<{ x: number; y: number }> | null;
       } = {
         id: payload.id,
         project_id: payload.project_id,
@@ -459,6 +482,9 @@ export const supabaseFeedbackService = {
       };
       if (!isMissingColorColumnError(error)) {
         legacyPayload.color = payload.color;
+      }
+      if (!isMissingPathPointsColumnError(error)) {
+        legacyPayload.path_points = payload.path_points;
       }
       ({ error } = await db.from("comments").insert(legacyPayload));
     }
