@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type WheelEvent } from "react";
+import { RefreshCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { ImageStage } from "@/features/editor/image/ImageStage";
 import { ImageAnnotationOverlay } from "@/features/editor/image/ImageAnnotationOverlay";
 import { useImageInteractions } from "@/features/editor/image/useImageInteractions";
@@ -6,6 +7,7 @@ import { useAnnotationColors } from "@/features/editor/shared/state/useAnnotatio
 import type { OverlayBounds } from "@/features/editor/shared/coords/normalizedCoords";
 import type { CreateAnnotationPayload, NormalizedAnnotation, ToolMode } from "@/features/editor/shared/types/annotation";
 import { sanitizeAnnotationColor } from "@/features/editor/shared/colors/annotationColor";
+import { cn } from "@/lib/utils";
 
 interface ImageEditorProps {
   mode: "editor" | "review";
@@ -95,6 +97,45 @@ export function ImageEditor({
     });
   }, [assetUrl]);
 
+  const applyZoom = useCallback((delta: number, anchorX: number, anchorY: number) => {
+    const viewport = viewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const rect = viewport.getBoundingClientRect();
+
+    setTransform((current) => {
+      const clampedZoom = clampZoom(Number((current.zoom + delta).toFixed(3)));
+      const worldX = (anchorX - current.panX) / current.zoom;
+      const worldY = (anchorY - current.panY) / current.zoom;
+      const nextPanX = anchorX - worldX * clampedZoom;
+      const nextPanY = anchorY - worldY * clampedZoom;
+
+      return clampPan(clampedZoom, nextPanX, nextPanY, rect.width, rect.height);
+    });
+  }, []);
+
+  const stepZoom = useCallback((delta: number) => {
+    const viewport = viewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const rect = viewport.getBoundingClientRect();
+    const anchorX = rect.width / 2;
+    const anchorY = rect.height / 2;
+    applyZoom(delta, anchorX, anchorY);
+  }, [applyZoom]);
+
+  const resetZoom = useCallback(() => {
+    setTransform({
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+    });
+  }, []);
+
   const handleWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
     if (!event.ctrlKey && !event.metaKey) {
       return;
@@ -112,17 +153,8 @@ export function ImageEditor({
     const cursorX = event.clientX - rect.left;
     const cursorY = event.clientY - rect.top;
     const delta = event.deltaY < 0 ? 0.12 : -0.12;
-
-    setTransform((current) => {
-      const nextZoom = clampZoom(Number((current.zoom + delta).toFixed(3)));
-      const worldX = (cursorX - current.panX) / current.zoom;
-      const worldY = (cursorY - current.panY) / current.zoom;
-      const nextPanX = cursorX - worldX * nextZoom;
-      const nextPanY = cursorY - worldY * nextZoom;
-
-      return clampPan(nextZoom, nextPanX, nextPanY, rect.width, rect.height);
-    });
-  }, []);
+    applyZoom(delta, cursorX, cursorY);
+  }, [applyZoom]);
 
   if (!assetUrl) {
     return (
@@ -156,7 +188,48 @@ export function ImageEditor({
       </div>
 
       <div className="pointer-events-none absolute bottom-2 right-2 rounded-md border border-border/70 bg-card/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm">
-        {Math.round(transform.zoom * 100)}%
+        <div className="pointer-events-auto inline-flex items-center gap-1">
+          <button
+            type="button"
+            className={cn(
+              "flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              transform.zoom <= MIN_ZOOM + 0.001 && "cursor-not-allowed opacity-40",
+            )}
+            onClick={() => stepZoom(-0.12)}
+            title="Zoom out (Ctrl/Cmd + mouse wheel)"
+            disabled={transform.zoom <= MIN_ZOOM + 0.001}
+          >
+            <ZoomOut className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            className="rounded px-1.5 py-0.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted"
+            onClick={resetZoom}
+            title="Reset zoom"
+          >
+            {Math.round(transform.zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              transform.zoom >= MAX_ZOOM - 0.001 && "cursor-not-allowed opacity-40",
+            )}
+            onClick={() => stepZoom(0.12)}
+            title="Zoom in (Ctrl/Cmd + mouse wheel)"
+            disabled={transform.zoom >= MAX_ZOOM - 0.001}
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            onClick={resetZoom}
+            title="Reset zoom to 100%"
+          >
+            <RefreshCcw className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );

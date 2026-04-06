@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Plus } from "lucide-react";
 import { CommentCard } from "@/components/feedback/CommentCard";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,16 @@ export function CommentSidebar({
   onCancelDraft,
   onMarkFixed,
 }: CommentSidebarProps) {
+  const draftInputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (!hasPendingAnnotation) {
+      return;
+    }
+
+    draftInputRef.current?.focus();
+  }, [hasPendingAnnotation]);
+
   return (
     <div className="flex w-72 shrink-0 flex-col border-r border-border/60 bg-card">
       <div className="flex items-center justify-between px-4 py-3">
@@ -55,6 +66,7 @@ export function CommentSidebar({
             Choose a position or draw an annotation, then add your comment.
           </p>
           <Textarea
+            ref={draftInputRef}
             value={draftComment}
             onChange={(event) => onDraftCommentChange(event.target.value)}
             placeholder="Describe the feedback..."

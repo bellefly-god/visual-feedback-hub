@@ -118,11 +118,40 @@ function toProjectDateLabel(iso: string): string {
 function getCommentsByProject(store: FeedbackStore, projectId: string) {
   return store.comments
     .filter((comment) => comment.projectId === projectId)
+    .sort((a, b) => {
+      const orderA = a.displayOrder ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.displayOrder ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+}
+
+function ensureProjectDisplayOrder(store: FeedbackStore, projectId: string): void {
+  const projectComments = store.comments
+    .filter((comment) => comment.projectId === projectId)
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  let mutated = false;
+  projectComments.forEach((comment, index) => {
+    const nextOrder = index + 1;
+    if (comment.displayOrder !== nextOrder) {
+      comment.displayOrder = nextOrder;
+      mutated = true;
+    }
+  });
+
+  if (mutated) {
+    writeStore(store);
+  }
 }
 
 function toCommentViews(store: FeedbackStore, projectId: string): CommentView[] {
+  ensureProjectDisplayOrder(store, projectId);
+
   return getCommentsByProject(store, projectId).map((comment, index) => {
+    const displayOrder = comment.displayOrder ?? index + 1;
     const replies = store.replies
       .filter((reply) => reply.commentId === comment.id)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
@@ -135,6 +164,7 @@ function toCommentViews(store: FeedbackStore, projectId: string): CommentView[] 
 
     return {
       id: comment.id,
+      displayOrder,
       author: comment.authorName,
       avatar: getInitials(comment.authorName),
       message: comment.content,
@@ -146,7 +176,7 @@ function toCommentViews(store: FeedbackStore, projectId: string): CommentView[] 
       height: comment.height,
       color: comment.color,
       page: comment.page,
-      pinNumber: index + 1,
+      pinNumber: displayOrder,
       replies,
       createdAt: toRelativeTimeLabel(comment.createdAt),
     };
@@ -259,10 +289,15 @@ export const feedbackService = {
   async createComment(input: CreateCommentInput): Promise<CommentView[]> {
     const store = readStore();
     const now = getNowIso();
+    const projectComments = store.comments.filter((comment) => comment.projectId === input.projectId);
+    const nextDisplayOrder = projectComments.reduce((max, comment) => {
+      return Math.max(max, comment.displayOrder ?? 0);
+    }, 0) + 1;
 
     store.comments.push({
       id: crypto.randomUUID(),
       projectId: input.projectId,
+      displayOrder: nextDisplayOrder,
       page: input.page,
       x: input.x,
       y: input.y,

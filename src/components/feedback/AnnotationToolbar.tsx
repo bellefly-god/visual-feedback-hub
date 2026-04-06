@@ -1,4 +1,4 @@
-import { MousePointer2, MessageCircle, ArrowUpRight, Square, Highlighter } from "lucide-react";
+import { MousePointer2, MessageCircle, ArrowUpRight, Square, Highlighter, Redo2, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ComponentType } from "react";
 import type { AnnotationToolId } from "@/components/feedback/annotationTools";
@@ -10,8 +10,12 @@ import {
 interface AnnotationToolbarProps {
   activeTool: AnnotationToolId;
   selectedColor?: string;
+  canUndo?: boolean;
+  canRedo?: boolean;
   onToolChange?: (tool: AnnotationToolId) => void;
   onColorChange?: (color: string) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 const iconByTool: Record<AnnotationToolId, ComponentType<{ className?: string }>> = {
@@ -37,8 +41,12 @@ const colorEnabledTools = new Set<AnnotationToolId>(["pin", "arrow", "rectangle"
 export function AnnotationToolbar({
   activeTool: controlledTool,
   selectedColor,
+  canUndo = false,
+  canRedo = false,
   onToolChange,
   onColorChange,
+  onUndo,
+  onRedo,
 }: AnnotationToolbarProps) {
   const currentColor = sanitizeAnnotationColor(selectedColor);
   const canPickColor = colorEnabledTools.has(controlledTool);
@@ -90,6 +98,33 @@ export function AnnotationToolbar({
             />
           );
         })}
+      </div>
+
+      <div className="inline-flex items-center gap-1 rounded-lg border border-border/70 px-1 py-1">
+        <button
+          type="button"
+          title="Undo (Cmd/Ctrl+Z)"
+          disabled={!canUndo || !onUndo}
+          onClick={() => onUndo?.()}
+          className={cn(
+            "flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-all",
+            canUndo && onUndo ? "hover:bg-muted hover:text-foreground" : "opacity-40 cursor-not-allowed",
+          )}
+        >
+          <Undo2 className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          title="Redo (Cmd/Ctrl+Shift+Z / Cmd/Ctrl+Y)"
+          disabled={!canRedo || !onRedo}
+          onClick={() => onRedo?.()}
+          className={cn(
+            "flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-all",
+            canRedo && onRedo ? "hover:bg-muted hover:text-foreground" : "opacity-40 cursor-not-allowed",
+          )}
+        >
+          <Redo2 className="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
   );

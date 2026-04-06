@@ -75,6 +75,7 @@ export const seedComments: CommentRecord[] = [
   {
     id: "c1",
     projectId: "1",
+    displayOrder: 1,
     x: 32,
     y: 18,
     shapeType: "pin",
@@ -87,6 +88,7 @@ export const seedComments: CommentRecord[] = [
   {
     id: "c2",
     projectId: "1",
+    displayOrder: 2,
     x: 65,
     y: 42,
     shapeType: "pin",
@@ -99,6 +101,7 @@ export const seedComments: CommentRecord[] = [
   {
     id: "c3",
     projectId: "1",
+    displayOrder: 3,
     x: 48,
     y: 72,
     shapeType: "pin",
@@ -111,6 +114,7 @@ export const seedComments: CommentRecord[] = [
   {
     id: "c4",
     projectId: "1",
+    displayOrder: 4,
     x: 78,
     y: 55,
     shapeType: "pin",

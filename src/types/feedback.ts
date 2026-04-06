@@ -17,6 +17,7 @@ export interface ProjectRecord {
 export interface CommentRecord {
   id: string;
   projectId: string;
+  displayOrder?: number;
   page?: number;
   x: number;
   y: number;
@@ -58,6 +59,7 @@ export interface CommentReplyView {
 
 export interface CommentView {
   id: string;
+  displayOrder: number;
   author: string;
   avatar: string;
   message: string;

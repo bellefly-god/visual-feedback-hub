@@ -24,6 +24,7 @@ type ProjectRow = {
 type CommentRow = {
   id: string;
   project_id: string;
+  display_order: number | null;
   page: number | null;
   x: number;
   y: number;
@@ -132,6 +133,19 @@ function isMissingColorColumnError(error: { code?: string; message?: string } | 
   );
 }
 
+function isMissingDisplayOrderColumnError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) {
+    return false;
+  }
+
+  return (
+    error.code === "PGRST204" ||
+    error.code === "42703" ||
+    (error.message?.toLowerCase().includes("column") === true &&
+      error.message.toLowerCase().includes("display_order"))
+  );
+}
+
 function toRelativeTimeLabel(iso: string): string {
   return `${formatDistanceToNowStrict(new Date(iso), { addSuffix: true })}`;
 }
@@ -201,9 +215,10 @@ async function getRepliesByCommentId(commentIds: string[]): Promise<Map<string, 
   return grouped;
 }
 
-function toCommentView(comment: CommentRow, pinNumber: number, replies: ReplyRecord[]): CommentView {
+function toCommentView(comment: CommentRow, displayOrder: number, replies: ReplyRecord[]): CommentView {
   return {
     id: comment.id,
+    displayOrder,
     author: comment.author_name,
     avatar: getInitials(comment.author_name),
     message: comment.content,
@@ -215,7 +230,7 @@ function toCommentView(comment: CommentRow, pinNumber: number, replies: ReplyRec
     height: comment.height ?? undefined,
     color: comment.color ?? undefined,
     page: comment.page ?? undefined,
-    pinNumber,
+    pinNumber: displayOrder,
     replies: replies.map((reply) => ({
       author: reply.authorName,
       avatar: getInitials(reply.authorName),
@@ -356,11 +371,20 @@ export const supabaseFeedbackService = {
 
   async listComments(projectId: string): Promise<CommentView[]> {
     const db = assertSupabase();
-    const { data, error } = await db
+    let { data, error } = await db
       .from("comments")
       .select("*")
       .eq("project_id", projectId)
+      .order("display_order", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true });
+
+    if (isMissingDisplayOrderColumnError(error)) {
+      ({ data, error } = await db
+        .from("comments")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: true }));
+    }
 
     if (error) {
       throw error;
@@ -370,16 +394,36 @@ export const supabaseFeedbackService = {
     const repliesMap = await getRepliesByCommentId(comments.map((comment) => comment.id));
 
     return comments.map((comment, index) =>
-      toCommentView(comment, index + 1, repliesMap.get(comment.id) ?? []),
+      toCommentView(comment, comment.display_order ?? index + 1, repliesMap.get(comment.id) ?? []),
     );
   },
 
   async createComment(input: CreateCommentInput): Promise<CommentView[]> {
     const db = assertSupabase();
     const now = getNowIso();
+    let nextDisplayOrder = 1;
+    let supportsDisplayOrder = true;
+
+    const { data: lastWithOrder, error: orderLookupError } = await db
+      .from("comments")
+      .select("display_order")
+      .eq("project_id", input.projectId)
+      .order("display_order", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (isMissingDisplayOrderColumnError(orderLookupError)) {
+      supportsDisplayOrder = false;
+    } else if (orderLookupError) {
+      throw orderLookupError;
+    } else {
+      nextDisplayOrder = ((lastWithOrder as { display_order: number | null } | null)?.display_order ?? 0) + 1;
+    }
+
     const payload = {
       id: crypto.randomUUID(),
       project_id: input.projectId,
+      display_order: nextDisplayOrder,
       page: input.page ?? null,
       x: input.x,
       y: input.y,
@@ -395,8 +439,10 @@ export const supabaseFeedbackService = {
     };
 
     let { error } = await db.from("comments").insert(payload);
-    if (isMissingColorColumnError(error)) {
-      const legacyPayload: Omit<typeof payload, "color"> = {
+    if (isMissingColorColumnError(error) || isMissingDisplayOrderColumnError(error) || !supportsDisplayOrder) {
+      const legacyPayload: Omit<typeof payload, "color" | "display_order"> & {
+        color?: string | null;
+      } = {
         id: payload.id,
         project_id: payload.project_id,
         page: payload.page,
@@ -411,6 +457,9 @@ export const supabaseFeedbackService = {
         created_at: payload.created_at,
         updated_at: payload.updated_at,
       };
+      if (!isMissingColorColumnError(error)) {
+        legacyPayload.color = payload.color;
+      }
       ({ error } = await db.from("comments").insert(legacyPayload));
     }
 

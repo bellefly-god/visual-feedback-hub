@@ -1,9 +1,17 @@
-import type { PointerEventHandler } from "react";
+import type { PointerEvent, PointerEventHandler } from "react";
 import type { AnnotationColorState } from "@/features/editor/shared/types/editor-state";
 import type { NormalizedAnnotation, ToolMode } from "@/features/editor/shared/types/annotation";
 import type { OverlayBounds } from "@/features/editor/shared/coords/normalizedCoords";
-import { getArrowGeometry, getPinGeometry, getRectGeometry } from "@/features/editor/image/imageOverlayRenderers";
-import { adjustColor, sanitizeAnnotationColor, toRgba } from "@/features/editor/shared/colors/annotationColor";
+import {
+  getAnnotationAnchor,
+  getArrowGeometry,
+  getArrowHeadGeometry,
+  getHighlightGeometry,
+  getPenPathGeometry,
+  getPinGeometry,
+  getRectGeometry,
+} from "@/features/editor/image/imageOverlayRenderers";
+import { sanitizeAnnotationColor, toRgba } from "@/features/editor/shared/colors/annotationColor";
 
 type DragPreview = {
   toolMode: "arrow" | "rectangle" | "highlight";
@@ -63,6 +71,31 @@ function renderPreview(preview: DragPreview, colors: AnnotationColorState) {
   );
 }
 
+function renderOrderBadge(
+  order: number,
+  anchor: { x: number; y: number },
+  options?: { offsetX?: number; offsetY?: number },
+) {
+  const x = anchor.x + (options?.offsetX ?? 12);
+  const y = anchor.y + (options?.offsetY ?? -12);
+  return (
+    <g pointerEvents="none">
+      <circle cx={x} cy={y} r={9} fill="#111827" opacity={0.92} />
+      <text
+        x={x}
+        y={y + 0.5}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize={10}
+        fontWeight={700}
+        fill="#ffffff"
+      >
+        {order}
+      </text>
+    </g>
+  );
+}
+
 export function ImageAnnotationOverlay({
   mode,
   toolMode,
@@ -78,6 +111,7 @@ export function ImageAnnotationOverlay({
   onPointerCancel,
 }: ImageAnnotationOverlayProps) {
   const cursorClass = mode === "editor" && toolMode !== "select" ? "cursor-crosshair" : "cursor-default";
+  const selectionOutlineColor = "rgba(15, 23, 42, 0.45)";
 
   return (
     <div
@@ -88,12 +122,6 @@ export function ImageAnnotationOverlay({
       onPointerCancel={onPointerCancel}
     >
       <svg className="h-full w-full" role="presentation">
-        <defs>
-          <marker id="annotation-arrow-head" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-            <path d="M0,0 L0,6 L6,3 z" fill="context-stroke" />
-          </marker>
-        </defs>
-
         {bounds && (
           <rect
             x={bounds.x}
@@ -107,90 +135,171 @@ export function ImageAnnotationOverlay({
 
         {bounds && annotations.map((annotation) => {
           const isSelected = annotation.id === selectedAnnotationId;
+          const isDraft = annotation.status === "draft";
           const baseColor = sanitizeAnnotationColor(annotation.color ?? colors.stroke);
-          const activeColor = adjustColor(baseColor, -20);
+          const type = annotation.shapeType as string;
+          const strokeColor = baseColor;
+          const displayOrder = annotation.displayOrder ?? annotation.pinNumber ?? 0;
+          const anchor = getAnnotationAnchor(annotation, bounds);
 
-          if (annotation.shapeType === "pin") {
-            const pin = getPinGeometry(annotation, bounds);
-            return (
-              <g
-                key={annotation.id}
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                  onSelectAnnotation(annotation.id);
-                }}
-                className="cursor-pointer"
-              >
+          const selectAnnotation = (event: PointerEvent<SVGElement>) => {
+            event.stopPropagation();
+            onSelectAnnotation(annotation.id);
+          };
+
+          switch (type) {
+            case "pin": {
+              const pin = getPinGeometry(annotation, bounds);
+              return (
+                <g
+                  key={annotation.id}
+                  onPointerDown={selectAnnotation}
+                  className="cursor-pointer"
+                >
+                  <circle
+                    cx={pin.cx}
+                    cy={pin.cy}
+                    r={isSelected ? 11 : 10}
+                    fill={strokeColor}
+                    stroke={isSelected ? selectionOutlineColor : "#ffffff"}
+                    strokeWidth={isSelected ? 3 : 2}
+                    strokeDasharray={isDraft ? "2 2" : undefined}
+                  />
+                  <text
+                    x={pin.cx}
+                    y={pin.cy + 0.5}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={11}
+                    fontWeight={600}
+                    fill="#ffffff"
+                  >
+                    {displayOrder || pin.label}
+                  </text>
+                </g>
+              );
+            }
+
+            case "arrow": {
+              const arrow = getArrowGeometry(annotation, bounds);
+              const arrowHead = getArrowHeadGeometry(arrow);
+              return (
+                <g key={annotation.id} className="cursor-pointer" onPointerDown={selectAnnotation}>
+                  {isSelected && (
+                    <line
+                      x1={arrow.x1}
+                      y1={arrow.y1}
+                      x2={arrow.x2}
+                      y2={arrow.y2}
+                      stroke={selectionOutlineColor}
+                      strokeWidth={5}
+                      strokeLinecap="round"
+                    />
+                  )}
+                  <line
+                    x1={arrow.x1}
+                    y1={arrow.y1}
+                    x2={arrow.x2}
+                    y2={arrow.y2}
+                    stroke={strokeColor}
+                    strokeWidth={isSelected ? 3 : 2}
+                    strokeLinecap="round"
+                    strokeDasharray={isDraft ? "6 4" : undefined}
+                  />
+                  {isSelected && (
+                    <polygon points={arrowHead.points} fill={selectionOutlineColor} />
+                  )}
+                  <polygon points={arrowHead.points} fill={strokeColor} />
+                  {displayOrder > 0 && renderOrderBadge(displayOrder, anchor)}
+                </g>
+              );
+            }
+
+            case "rectangle": {
+              const rect = getRectGeometry(annotation, bounds);
+              const fill = isSelected ? toRgba(baseColor, 0.2) : toRgba(baseColor, 0.12);
+              return (
+                <g key={annotation.id}>
+                  <rect
+                    x={rect.x}
+                    y={rect.y}
+                    width={rect.width}
+                    height={rect.height}
+                    rx={6}
+                    ry={6}
+                    fill={fill}
+                    stroke={strokeColor}
+                    strokeWidth={isSelected ? 2.4 : 2}
+                    vectorEffect="non-scaling-stroke"
+                    strokeDasharray={isDraft ? "6 4" : undefined}
+                    className="cursor-pointer"
+                    onPointerDown={selectAnnotation}
+                  />
+                  {displayOrder > 0 && renderOrderBadge(displayOrder, anchor)}
+                </g>
+              );
+            }
+
+            case "highlight": {
+              const highlight = getHighlightGeometry(annotation, bounds);
+              return (
+                <g key={annotation.id}>
+                  <rect
+                    x={highlight.x}
+                    y={highlight.y}
+                    width={highlight.width}
+                    height={highlight.height}
+                    rx={6}
+                    ry={6}
+                    fill={toRgba(baseColor, 0.24)}
+                    stroke={strokeColor}
+                    strokeWidth={isSelected ? 2.4 : 2}
+                    vectorEffect="non-scaling-stroke"
+                    strokeDasharray={isDraft ? "6 4" : undefined}
+                    className="cursor-pointer"
+                    onPointerDown={selectAnnotation}
+                  />
+                  {displayOrder > 0 && renderOrderBadge(displayOrder, anchor)}
+                </g>
+              );
+            }
+
+            case "pen": {
+              const pen = getPenPathGeometry(annotation, bounds);
+              return (
+                <g key={annotation.id}>
+                  <path
+                    d={pen.d}
+                    fill="none"
+                    stroke={strokeColor}
+                    strokeWidth={isSelected ? 3.2 : 2.4}
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray={isDraft ? "4 3" : undefined}
+                    className="cursor-pointer"
+                    onPointerDown={selectAnnotation}
+                  />
+                  {displayOrder > 0 && renderOrderBadge(displayOrder, anchor)}
+                </g>
+              );
+            }
+
+            default: {
+              const pin = getPinGeometry(annotation, bounds);
+              return (
                 <circle
+                  key={annotation.id}
                   cx={pin.cx}
                   cy={pin.cy}
-                  r={isSelected ? 11 : 10}
-                  fill={isSelected ? activeColor : baseColor}
-                  stroke="#ffffff"
-                  strokeWidth={2}
+                  r={isSelected ? 9 : 8}
+                  fill={strokeColor}
+                  className="cursor-pointer"
+                  onPointerDown={selectAnnotation}
                 />
-                <text
-                  x={pin.cx}
-                  y={pin.cy + 0.5}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={11}
-                  fontWeight={600}
-                  fill="#ffffff"
-                >
-                  {pin.label}
-                </text>
-              </g>
-            );
+              );
+            }
           }
-
-          if (annotation.shapeType === "arrow") {
-            const arrow = getArrowGeometry(annotation, bounds);
-            return (
-              <line
-                key={annotation.id}
-                x1={arrow.x1}
-                y1={arrow.y1}
-                x2={arrow.x2}
-                y2={arrow.y2}
-                stroke={isSelected ? activeColor : baseColor}
-                strokeWidth={isSelected ? 3 : 2}
-                markerEnd="url(#annotation-arrow-head)"
-                className="cursor-pointer"
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                  onSelectAnnotation(annotation.id);
-                }}
-              />
-            );
-          }
-
-          const rect = getRectGeometry(annotation, bounds);
-          const fill = annotation.shapeType === "highlight"
-            ? toRgba(baseColor, 0.24)
-            : isSelected
-              ? toRgba(baseColor, 0.2)
-              : toRgba(baseColor, 0.12);
-
-          return (
-            <rect
-              key={annotation.id}
-              x={rect.x}
-              y={rect.y}
-              width={rect.width}
-              height={rect.height}
-              rx={6}
-              ry={6}
-              fill={fill}
-              stroke={isSelected ? activeColor : baseColor}
-              strokeWidth={isSelected ? 2.4 : 2}
-              className="cursor-pointer"
-              onPointerDown={(event) => {
-                event.stopPropagation();
-                onSelectAnnotation(annotation.id);
-              }}
-            />
-          );
         })}
 
         {preview && renderPreview(preview, colors)}

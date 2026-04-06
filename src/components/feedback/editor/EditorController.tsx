@@ -15,12 +15,43 @@ import { useSelectedAnnotationState } from "@/features/editor/shared/state/useSe
 import type { AnnotationShapeMode, CreateAnnotationPayload } from "@/features/editor/shared/types/annotation";
 import { DEFAULT_ANNOTATION_COLOR, sanitizeAnnotationColor } from "@/features/editor/shared/colors/annotationColor";
 import {
+  createDraftAnnotationId,
   commentsToAnnotations,
-  DRAFT_ANNOTATION_ID,
+  isDraftAnnotationId,
   type PendingAnnotation,
   resolveSelectedCommentId,
   withPendingAnnotation,
 } from "@/features/editor/shared/links/commentAnnotationLink";
+
+interface AnnotationHistorySnapshot {
+  comments: CommentView[];
+  pendingAnnotation: PendingAnnotation | null;
+  activeCommentId: string | null;
+  draftComment: string;
+}
+
+interface AnnotationHistoryState {
+  past: AnnotationHistorySnapshot[];
+  future: AnnotationHistorySnapshot[];
+}
+
+const HISTORY_LIMIT = 80;
+
+function cloneCommentViews(comments: CommentView[]): CommentView[] {
+  return comments.map((comment) => ({
+    ...comment,
+    replies: comment.replies.map((reply) => ({ ...reply })),
+  }));
+}
+
+function cloneHistorySnapshot(snapshot: AnnotationHistorySnapshot): AnnotationHistorySnapshot {
+  return {
+    comments: cloneCommentViews(snapshot.comments),
+    pendingAnnotation: snapshot.pendingAnnotation ? { ...snapshot.pendingAnnotation } : null,
+    activeCommentId: snapshot.activeCommentId,
+    draftComment: snapshot.draftComment,
+  };
+}
 
 export function EditorController() {
   const {
@@ -42,6 +73,10 @@ export function EditorController() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [editorMessage, setEditorMessage] = useState<string | null>(null);
+  const [annotationHistory, setAnnotationHistory] = useState<AnnotationHistoryState>({
+    past: [],
+    future: [],
+  });
   const isDebugEnabled = import.meta.env.DEV;
 
   const navigate = useNavigate();
@@ -50,7 +85,7 @@ export function EditorController() {
 
   const resolvedProjectId = normalizeProjectId(projectId ?? DEMO_PROJECT_ID);
   const stateProjectName = (location.state as { projectName?: string } | null)?.projectName;
-  const isCommentMode = toolMode === "pin";
+  const isCommentMode = Boolean(pendingAnnotation);
 
   const debugLog = useCallback(
     (...args: unknown[]) => {
@@ -81,6 +116,99 @@ export function EditorController() {
   }, [resolvedProjectId, shareToken]);
 
   const shareLink = useMemo(() => `${window.location.origin}${reviewPath}`, [reviewPath]);
+  const isImageEditor = assetType !== "pdf";
+  const canUndo = isImageEditor && annotationHistory.past.length > 0;
+  const canRedo = isImageEditor && annotationHistory.future.length > 0;
+
+  const captureHistorySnapshot = useCallback((): AnnotationHistorySnapshot => {
+    return {
+      comments: cloneCommentViews(comments),
+      pendingAnnotation: pendingAnnotation ? { ...pendingAnnotation } : null,
+      activeCommentId,
+      draftComment,
+    };
+  }, [activeCommentId, comments, draftComment, pendingAnnotation]);
+
+  const applyHistorySnapshot = useCallback(
+    (snapshot: AnnotationHistorySnapshot) => {
+      setComments(cloneCommentViews(snapshot.comments));
+      setPendingAnnotation(snapshot.pendingAnnotation ? { ...snapshot.pendingAnnotation } : null);
+      setActiveCommentId(snapshot.activeCommentId);
+      setDraftComment(snapshot.draftComment);
+      setEditorMessage(null);
+    },
+    [setActiveCommentId],
+  );
+
+  const pushHistorySnapshot = useCallback((snapshot: AnnotationHistorySnapshot) => {
+    setAnnotationHistory((current) => ({
+      past: [...current.past, cloneHistorySnapshot(snapshot)].slice(-HISTORY_LIMIT),
+      future: [],
+    }));
+  }, []);
+
+  const recordImageAction = useCallback(
+    (mutate: () => void) => {
+      if (!isImageEditor) {
+        mutate();
+        return;
+      }
+
+      pushHistorySnapshot(captureHistorySnapshot());
+      mutate();
+    },
+    [captureHistorySnapshot, isImageEditor, pushHistorySnapshot],
+  );
+
+  const handleUndo = useCallback(() => {
+    if (!isImageEditor) {
+      return;
+    }
+
+    const currentSnapshot = captureHistorySnapshot();
+    let targetSnapshot: AnnotationHistorySnapshot | null = null;
+
+    setAnnotationHistory((history) => {
+      if (history.past.length === 0) {
+        return history;
+      }
+
+      targetSnapshot = cloneHistorySnapshot(history.past[history.past.length - 1]);
+      return {
+        past: history.past.slice(0, -1),
+        future: [cloneHistorySnapshot(currentSnapshot), ...history.future].slice(0, HISTORY_LIMIT),
+      };
+    });
+
+    if (targetSnapshot) {
+      applyHistorySnapshot(targetSnapshot);
+    }
+  }, [applyHistorySnapshot, captureHistorySnapshot, isImageEditor]);
+
+  const handleRedo = useCallback(() => {
+    if (!isImageEditor) {
+      return;
+    }
+
+    const currentSnapshot = captureHistorySnapshot();
+    let targetSnapshot: AnnotationHistorySnapshot | null = null;
+
+    setAnnotationHistory((history) => {
+      if (history.future.length === 0) {
+        return history;
+      }
+
+      targetSnapshot = cloneHistorySnapshot(history.future[0]);
+      return {
+        past: [...history.past, cloneHistorySnapshot(currentSnapshot)].slice(-HISTORY_LIMIT),
+        future: history.future.slice(1),
+      };
+    });
+
+    if (targetSnapshot) {
+      applyHistorySnapshot(targetSnapshot);
+    }
+  }, [applyHistorySnapshot, captureHistorySnapshot, isImageEditor]);
 
   const clampZoom = (value: number) => Math.max(0.5, Math.min(3, value));
 
@@ -115,6 +243,7 @@ export function EditorController() {
       setComments(nextComments);
       setShareToken(existingShareLink?.token ?? null);
       setActiveCommentId((current) => resolveSelectedCommentId(current, nextComments));
+      setAnnotationHistory({ past: [], future: [] });
     };
 
     void load();
@@ -142,6 +271,29 @@ export function EditorController() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTypingTarget = Boolean(
+        target &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.isContentEditable),
+      );
+
+      if ((event.metaKey || event.ctrlKey) && !isTypingTarget) {
+        const key = event.key.toLowerCase();
+        if (key === "z" && !event.shiftKey) {
+          event.preventDefault();
+          handleUndo();
+          return;
+        }
+
+        if (key === "y" || (key === "z" && event.shiftKey)) {
+          event.preventDefault();
+          handleRedo();
+          return;
+        }
+      }
+
       if (!event.metaKey && !event.ctrlKey) {
         return;
       }
@@ -160,7 +312,7 @@ export function EditorController() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [handleRedo, handleUndo]);
 
   useEffect(() => {
     debugLog("active tool changed", toolMode);
@@ -219,13 +371,23 @@ export function EditorController() {
   };
 
   const handleCreateAnnotation = (payload: CreateAnnotationPayload) => {
-    debugLog("annotation creation requested", payload);
-    setPendingAnnotation({
-      ...payload,
-      page: assetType === "pdf" ? currentPdfPage : undefined,
+    if (pendingAnnotation) {
+      setEditorMessage("Finish the current draft comment or cancel it before drawing a new one.");
+      return;
+    }
+
+    recordImageAction(() => {
+      debugLog("annotation creation requested", payload);
+      setPendingAnnotation({
+        id: createDraftAnnotationId(),
+        status: "draft",
+        ...payload,
+        color: sanitizeAnnotationColor(payload.color),
+        page: assetType === "pdf" ? currentPdfPage : undefined,
+      });
+      setActiveCommentId(null);
+      setEditorMessage("Annotation placed. Add comment for this draft.");
     });
-    setToolMode("pin");
-    setEditorMessage("Annotation placed. Add comment text and save.");
   };
 
   const handleSubmitComment = async () => {
@@ -250,6 +412,10 @@ export function EditorController() {
       shapeType,
     });
 
+    if (isImageEditor) {
+      pushHistorySnapshot(captureHistorySnapshot());
+    }
+
     applyNextComments(nextComments);
     setDraftComment("");
     setPendingAnnotation(null);
@@ -264,6 +430,9 @@ export function EditorController() {
 
     try {
       const nextComments = await feedbackGateway.updateCommentStatus(activeComment.id, "fixed");
+      if (isImageEditor) {
+        pushHistorySnapshot(captureHistorySnapshot());
+      }
       applyNextComments(nextComments);
       setEditorMessage("Comment marked as fixed.");
     } catch (error) {
@@ -296,6 +465,8 @@ export function EditorController() {
           <AnnotationToolbar
             activeTool={toolMode}
             selectedColor={activeAnnotationColor}
+            canUndo={canUndo}
+            canRedo={canRedo}
             onToolChange={(tool) => {
               const nextMode = toToolMode(tool);
               setToolMode(nextMode);
@@ -308,31 +479,33 @@ export function EditorController() {
               );
             }}
             onColorChange={(color) => setActiveAnnotationColor(sanitizeAnnotationColor(color))}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
           />
 
-          <div className="inline-flex items-center rounded-lg border border-border/60">
-            <button
-              type="button"
-              className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              onClick={() => stepZoom(-0.1)}
-              title="Zoom out (Ctrl/Cmd + -)"
-              disabled={assetType !== "pdf"}
-            >
-              <ZoomOut className="h-3.5 w-3.5" />
-            </button>
-            <span className="min-w-[52px] px-2 text-center text-[11px] text-muted-foreground">
-              {Math.round(zoomLevel * 100)}%
-            </span>
-            <button
-              type="button"
-              className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              onClick={() => stepZoom(0.1)}
-              title="Zoom in (Ctrl/Cmd + +)"
-              disabled={assetType !== "pdf"}
-            >
-              <ZoomIn className="h-3.5 w-3.5" />
-            </button>
-          </div>
+          {assetType === "pdf" && (
+            <div className="inline-flex items-center rounded-lg border border-border/60">
+              <button
+                type="button"
+                className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                onClick={() => stepZoom(-0.1)}
+                title="Zoom out (Ctrl/Cmd + -)"
+              >
+                <ZoomOut className="h-3.5 w-3.5" />
+              </button>
+              <span className="min-w-[52px] px-2 text-center text-[11px] text-muted-foreground">
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <button
+                type="button"
+                className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                onClick={() => stepZoom(0.1)}
+                title="Zoom in (Ctrl/Cmd + +)"
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
 
           <span className="h-4 w-px bg-border" />
 
@@ -369,13 +542,15 @@ export function EditorController() {
           }}
           onRequestPinMode={() => {
             setToolMode("pin");
-            setEditorMessage("Click to place annotation, then add comment.");
+            setEditorMessage("Click image to place a pin, then add comment.");
           }}
           onSubmitComment={() => void handleSubmitComment()}
           onCancelDraft={() => {
-            setDraftComment("");
-            setPendingAnnotation(null);
-            setToolMode("select");
+            recordImageAction(() => {
+              setDraftComment("");
+              setPendingAnnotation(null);
+              setEditorMessage("Draft annotation removed.");
+            });
           }}
           onMarkFixed={() => void handleMarkFixed()}
         />
@@ -400,7 +575,7 @@ export function EditorController() {
                     activeColor={activeAnnotationColor}
                     onSelectAnnotation={(annotationId) => {
                       debugLog("selection changed", { selectedAnnotationId: annotationId });
-                      if (!annotationId || annotationId === DRAFT_ANNOTATION_ID) {
+                      if (!annotationId || isDraftAnnotationId(annotationId)) {
                         setActiveCommentId(null);
                         return;
                       }

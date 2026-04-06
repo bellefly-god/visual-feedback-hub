@@ -16,6 +16,7 @@ create table if not exists public.projects (
 create table if not exists public.comments (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,
+  display_order int,
   page int,
   x double precision not null,
   y double precision not null,
@@ -49,10 +50,14 @@ create table if not exists public.share_links (
 );
 
 create index if not exists idx_comments_project_id on public.comments(project_id);
+create index if not exists idx_comments_project_order on public.comments(project_id, display_order);
 create index if not exists idx_comments_status on public.comments(status);
 create index if not exists idx_replies_comment_id on public.replies(comment_id);
 create index if not exists idx_share_links_project_id on public.share_links(project_id);
 create index if not exists idx_share_links_token on public.share_links(token);
+
+alter table public.comments
+  add column if not exists display_order int;
 
 alter table public.comments
   add column if not exists color text not null default '#2563eb';

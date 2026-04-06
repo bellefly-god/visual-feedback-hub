@@ -23,6 +23,9 @@ export function CommentCard({ comment, isActive, onClick, showReplies = false }:
     >
       <div className="mb-1.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
+          <div className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/15 px-1 text-[10px] font-semibold text-primary">
+            #{comment.displayOrder}
+          </div>
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground/[0.06] text-[10px] font-semibold text-foreground/70">
             {comment.avatar}
           </div>
