@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CommentCard } from "@/components/feedback/CommentCard";
 import { AssetPreview } from "@/components/feedback/AssetPreview";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { DEMO_REVIEW_TOKEN } from "@/lib/routePaths";
 import { feedbackGateway } from "@/services/feedbackGateway";
 import type { CommentView } from "@/types/feedback";
 import { AnnotationCanvas, type NormalizedAnnotation } from "@/components/feedback/editor/AnnotationCanvas";
+import type { CanvasContentBounds } from "@/components/feedback/editor/contentBounds";
 
 export default function ReviewPage() {
   const [activeComment, setActiveComment] = useState<string | null>(null);
@@ -20,14 +21,18 @@ export default function ReviewPage() {
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState(1);
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
+  const [contentBounds, setContentBounds] = useState<CanvasContentBounds | null>(null);
   const isDebugEnabled = import.meta.env.DEV;
   const { token } = useParams<{ token: string }>();
 
-  const debugLog = (...args: unknown[]) => {
-    if (isDebugEnabled) {
-      console.log("[ReviewPage]", ...args);
-    }
-  };
+  const debugLog = useCallback(
+    (...args: unknown[]) => {
+      if (isDebugEnabled) {
+        console.log("[ReviewPage]", ...args);
+      }
+    },
+    [isDebugEnabled],
+  );
 
   const reviewToken = token ?? DEMO_REVIEW_TOKEN;
   const visibleComments = useMemo(() => {
@@ -51,6 +56,14 @@ export default function ReviewPage() {
     [visibleComments],
   );
   const active = visibleComments.find((c) => c.id === activeComment);
+  const assetSessionKey = useMemo(() => {
+    const base = `${assetType}:${assetUrl || "empty"}`;
+    if (assetType !== "pdf") {
+      return base;
+    }
+
+    return `${base}:page-${currentPdfPage}`;
+  }, [assetType, assetUrl, currentPdfPage]);
 
   const applyNextComments = (nextComments: CommentView[]) => {
     setComments(nextComments);
@@ -123,6 +136,21 @@ export default function ReviewPage() {
       setPdfPageCount(1);
     }
   }, [assetType]);
+
+  useEffect(() => {
+    setContentBounds(null);
+  }, [assetType, assetUrl, currentPdfPage]);
+
+  useEffect(() => {
+    if (assetType !== "pdf") {
+      return;
+    }
+
+    debugLog("page change", {
+      page: currentPdfPage,
+      pageCount: pdfPageCount,
+    });
+  }, [assetType, currentPdfPage, debugLog, pdfPageCount]);
 
   const handleUpdateStatus = async (nextStatus: "approved" | "pending") => {
     if (!active) {
@@ -199,12 +227,15 @@ export default function ReviewPage() {
                 page={assetType === "pdf" ? currentPdfPage : undefined}
                 onPageChange={assetType === "pdf" ? setCurrentPdfPage : undefined}
                 onPageCountChange={assetType === "pdf" ? setPdfPageCount : undefined}
+                onContentBoundsChange={setContentBounds}
               />
               <AnnotationCanvas
                 mode="review"
                 toolMode="select"
+                assetSessionKey={assetSessionKey}
                 annotations={visibleAnnotations}
                 selectedAnnotationId={activeComment}
+                contentBounds={contentBounds}
                 onSelectAnnotation={(annotationId) => {
                   debugLog("selection changed", { selectedAnnotationId: annotationId });
                   setActiveComment(annotationId);

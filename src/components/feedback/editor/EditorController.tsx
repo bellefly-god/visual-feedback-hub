@@ -12,6 +12,7 @@ import { AnnotationCanvas, type CreateAnnotationPayload, type NormalizedAnnotati
 import { AssetRenderer } from "@/components/feedback/editor/AssetRenderer";
 import { CommentSidebar } from "@/components/feedback/editor/CommentSidebar";
 import { toToolMode, type AnnotationShapeMode, type ToolMode } from "@/components/feedback/editor/toolMode";
+import type { CanvasContentBounds } from "@/components/feedback/editor/contentBounds";
 
 type PendingAnnotation = CreateAnnotationPayload & {
   page?: number;
@@ -35,6 +36,7 @@ export function EditorController() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [editorMessage, setEditorMessage] = useState<string | null>(null);
+  const [contentBounds, setContentBounds] = useState<CanvasContentBounds | null>(null);
   const isDebugEnabled = import.meta.env.DEV;
 
   const navigate = useNavigate();
@@ -97,6 +99,14 @@ export function EditorController() {
   }, [resolvedProjectId, shareToken]);
 
   const shareLink = useMemo(() => `${window.location.origin}${reviewPath}`, [reviewPath]);
+  const assetSessionKey = useMemo(() => {
+    const base = `${assetType}:${assetUrl || "empty"}`;
+    if (assetType !== "pdf") {
+      return base;
+    }
+
+    return `${base}:page-${currentPdfPage}`;
+  }, [assetType, assetUrl, currentPdfPage]);
 
   const clampZoom = (value: number) => Math.max(0.5, Math.min(3, value));
 
@@ -169,6 +179,10 @@ export function EditorController() {
   }, [assetType, currentPdfPage, pendingAnnotation?.page]);
 
   useEffect(() => {
+    setContentBounds(null);
+  }, [assetType, assetUrl, currentPdfPage]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!event.metaKey && !event.ctrlKey) {
         return;
@@ -193,6 +207,17 @@ export function EditorController() {
   useEffect(() => {
     debugLog("active tool changed", toolMode);
   }, [debugLog, toolMode]);
+
+  useEffect(() => {
+    if (assetType !== "pdf") {
+      return;
+    }
+
+    debugLog("page change", {
+      page: currentPdfPage,
+      pageCount: pdfPageCount,
+    });
+  }, [assetType, currentPdfPage, debugLog, pdfPageCount]);
 
   const applyNextComments = (nextComments: CommentView[]) => {
     setComments(nextComments);
@@ -410,13 +435,16 @@ export function EditorController() {
                     page={assetType === "pdf" ? currentPdfPage : undefined}
                     onPageChange={assetType === "pdf" ? setCurrentPdfPage : undefined}
                     onPageCountChange={assetType === "pdf" ? setPdfPageCount : undefined}
+                    onContentBoundsChange={setContentBounds}
                   />
 
                   <AnnotationCanvas
                     mode="editor"
                     toolMode={toolMode}
+                    assetSessionKey={assetSessionKey}
                     annotations={canvasAnnotations}
                     selectedAnnotationId={activeCommentId}
+                    contentBounds={contentBounds}
                     onSelectAnnotation={(annotationId) => {
                       debugLog("selection changed", { selectedAnnotationId: annotationId });
                       if (!annotationId || annotationId === DRAFT_ANNOTATION_ID) {

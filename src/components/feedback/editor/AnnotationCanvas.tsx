@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { Canvas, Circle, FabricText, Group, Line, Rect } from "fabric";
 import type { AnnotationShape } from "@/types/feedback";
 import { isDragShapeMode, type AnnotationShapeMode, type ToolMode } from "@/components/feedback/editor/toolMode";
+import { isValidContentBounds, type CanvasContentBounds } from "@/components/feedback/editor/contentBounds";
 
 export interface NormalizedAnnotation {
   id: string;
@@ -24,8 +25,10 @@ export interface CreateAnnotationPayload {
 interface AnnotationCanvasProps {
   mode: "editor" | "review";
   toolMode: ToolMode;
+  assetSessionKey: string;
   annotations: NormalizedAnnotation[];
   selectedAnnotationId: string | null;
+  contentBounds?: CanvasContentBounds | null;
   onSelectAnnotation: (annotationId: string | null) => void;
   onCreateAnnotation?: (payload: CreateAnnotationPayload) => void;
 }
@@ -41,6 +44,8 @@ type FabricPointerEvent = {
   e: MouseEvent | PointerEvent | TouchEvent;
   target?: { annotationId?: string } | null;
 };
+
+const fabricManagedCanvasNodes = new WeakSet<HTMLCanvasElement>();
 
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, value));
@@ -66,9 +71,9 @@ function fromPercent(value: number, size: number): number {
   return (value / 100) * size;
 }
 
-function createPinObject(annotation: NormalizedAnnotation, canvasWidth: number, canvasHeight: number, highlighted: boolean) {
-  const centerX = fromPercent(annotation.x, canvasWidth);
-  const centerY = fromPercent(annotation.y, canvasHeight);
+function createPinObject(annotation: NormalizedAnnotation, bounds: CanvasContentBounds, highlighted: boolean) {
+  const centerX = bounds.x + fromPercent(annotation.x, bounds.width);
+  const centerY = bounds.y + fromPercent(annotation.y, bounds.height);
 
   const circle = new Circle({
     originX: "center",
@@ -95,11 +100,11 @@ function createPinObject(annotation: NormalizedAnnotation, canvasWidth: number, 
   });
 }
 
-function createArrowObject(annotation: NormalizedAnnotation, canvasWidth: number, canvasHeight: number, highlighted: boolean) {
-  const startX = fromPercent(annotation.x, canvasWidth);
-  const startY = fromPercent(annotation.y, canvasHeight);
-  const width = fromPercent(annotation.width ?? 0, canvasWidth);
-  const height = fromPercent(annotation.height ?? 0, canvasHeight);
+function createArrowObject(annotation: NormalizedAnnotation, bounds: CanvasContentBounds, highlighted: boolean) {
+  const startX = bounds.x + fromPercent(annotation.x, bounds.width);
+  const startY = bounds.y + fromPercent(annotation.y, bounds.height);
+  const width = fromPercent(annotation.width ?? 0, bounds.width);
+  const height = fromPercent(annotation.height ?? 0, bounds.height);
 
   return new Line([startX, startY, startX + width, startY + height], {
     stroke: highlighted ? "#1d4ed8" : "#2563eb",
@@ -109,16 +114,15 @@ function createArrowObject(annotation: NormalizedAnnotation, canvasWidth: number
 
 function createRectLikeObject(
   annotation: NormalizedAnnotation,
-  canvasWidth: number,
-  canvasHeight: number,
+  bounds: CanvasContentBounds,
   highlighted: boolean,
 ) {
   const widthPercent = Math.max(annotation.width ?? 1, 1);
   const heightPercent = Math.max(annotation.height ?? 1, 1);
-  const width = fromPercent(widthPercent, canvasWidth);
-  const height = fromPercent(heightPercent, canvasHeight);
-  const centerX = fromPercent(annotation.x, canvasWidth);
-  const centerY = fromPercent(annotation.y, canvasHeight);
+  const width = fromPercent(widthPercent, bounds.width);
+  const height = fromPercent(heightPercent, bounds.height);
+  const centerX = bounds.x + fromPercent(annotation.x, bounds.width);
+  const centerY = bounds.y + fromPercent(annotation.y, bounds.height);
 
   return new Rect({
     left: centerX - width / 2,
@@ -140,31 +144,43 @@ function createRectLikeObject(
 
 function createFabricObject(
   annotation: NormalizedAnnotation,
-  canvasWidth: number,
-  canvasHeight: number,
+  bounds: CanvasContentBounds,
   highlighted: boolean,
 ) {
   if (annotation.shapeType === "pin") {
-    return createPinObject(annotation, canvasWidth, canvasHeight, highlighted);
+    return createPinObject(annotation, bounds, highlighted);
   }
 
   if (annotation.shapeType === "arrow") {
-    return createArrowObject(annotation, canvasWidth, canvasHeight, highlighted);
+    return createArrowObject(annotation, bounds, highlighted);
   }
 
-  return createRectLikeObject(annotation, canvasWidth, canvasHeight, highlighted);
+  return createRectLikeObject(annotation, bounds, highlighted);
 }
 
 export function AnnotationCanvas({
   mode,
   toolMode,
+  assetSessionKey,
   annotations,
   selectedAnnotationId,
+  contentBounds,
   onSelectAnnotation,
   onCreateAnnotation,
 }: AnnotationCanvasProps) {
-  const canvasElementRef = useRef<HTMLCanvasElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const canvasDomRef = useRef<HTMLCanvasElement | null>(null);
   const fabricCanvasRef = useRef<Canvas | null>(null);
+  const listenersRef = useRef<{
+    mouseDown: (event: FabricPointerEvent) => void;
+    mouseMove: (event: FabricPointerEvent) => void;
+    mouseUp: (event: FabricPointerEvent) => void;
+  } | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const activeSessionKeyRef = useRef<string | null>(null);
+  const previousSessionKeyRef = useRef<string | null>(null);
+  const observedHostRef = useRef<HTMLDivElement | null>(null);
+  const initializingRef = useRef(false);
   const drawSessionRef = useRef<DrawSession | null>(null);
   const annotationsRef = useRef<NormalizedAnnotation[]>(annotations);
   const selectedIdRef = useRef<string | null>(selectedAnnotationId);
@@ -172,6 +188,7 @@ export function AnnotationCanvas({
   const modeRef = useRef<"editor" | "review">(mode);
   const toolModeRef = useRef<ToolMode>(toolMode);
   const sizeRef = useRef({ width: 1, height: 1 });
+  const contentBoundsRef = useRef<CanvasContentBounds | null>(null);
   const isDebugEnabled = import.meta.env.DEV;
 
   const debugLog = useCallback(
@@ -187,19 +204,47 @@ export function AnnotationCanvas({
     return canvas.getPointer(event.e as MouseEvent);
   };
 
+  const getBaselineBounds = useCallback((): CanvasContentBounds => {
+    const { width, height } = sizeRef.current;
+    const fallback: CanvasContentBounds = { x: 0, y: 0, width, height };
+    const bounds = contentBoundsRef.current;
+
+    if (!isValidContentBounds(bounds)) {
+      return fallback;
+    }
+
+    return bounds;
+  }, []);
+
+  const isPointInBounds = (point: { x: number; y: number }, bounds: CanvasContentBounds) => {
+    return (
+      point.x >= bounds.x &&
+      point.x <= bounds.x + bounds.width &&
+      point.y >= bounds.y &&
+      point.y <= bounds.y + bounds.height
+    );
+  };
+
+  const clampPointToBounds = (point: { x: number; y: number }, bounds: CanvasContentBounds) => {
+    return {
+      x: Math.max(bounds.x, Math.min(bounds.x + bounds.width, point.x)),
+      y: Math.max(bounds.y, Math.min(bounds.y + bounds.height, point.y)),
+    };
+  };
+
   const renderAnnotations = useCallback(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) {
       return;
     }
 
-    const { width, height } = sizeRef.current;
+    const bounds = getBaselineBounds();
     const canClick = true;
 
     canvas.clear();
 
     annotationsRef.current.forEach((annotation) => {
-      const object = createFabricObject(annotation, width, height, annotation.id === selectedIdRef.current);
+      const object = createFabricObject(annotation, bounds, annotation.id === selectedIdRef.current);
       (object as unknown as { annotationId?: string }).annotationId = annotation.id;
       object.hasControls = false;
       object.hasBorders = false;
@@ -216,7 +261,47 @@ export function AnnotationCanvas({
 
     canvas.selection = false;
     canvas.requestRenderAll();
-  }, []);
+  }, [getBaselineBounds]);
+
+  const disposeFabricSession = useCallback((reason: "asset-key-change" | "host-change" | "unmount" | "reinit") => {
+    debugLog("fabric dispose", {
+      reason,
+      activeSessionKey: activeSessionKeyRef.current,
+    });
+
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
+
+    const canvas = fabricCanvasRef.current;
+    const listeners = listenersRef.current;
+
+    if (canvas && listeners) {
+      canvas.off("mouse:down", listeners.mouseDown);
+      canvas.off("mouse:move", listeners.mouseMove);
+      canvas.off("mouse:up", listeners.mouseUp);
+    }
+
+    listenersRef.current = null;
+    drawSessionRef.current = null;
+
+    if (canvas) {
+      canvas.dispose();
+    }
+
+    fabricCanvasRef.current = null;
+    activeSessionKeyRef.current = null;
+
+    const host = hostRef.current;
+    if (host) {
+      host.replaceChildren();
+    }
+
+    if (canvasDomRef.current) {
+      fabricManagedCanvasNodes.delete(canvasDomRef.current);
+    }
+
+    canvasDomRef.current = null;
+  }, [debugLog]);
 
   useEffect(() => {
     callbacksRef.current = { onSelectAnnotation, onCreateAnnotation };
@@ -226,6 +311,11 @@ export function AnnotationCanvas({
     modeRef.current = mode;
     renderAnnotations();
   }, [mode, renderAnnotations]);
+
+  useEffect(() => {
+    contentBoundsRef.current = isValidContentBounds(contentBounds) ? contentBounds : null;
+    renderAnnotations();
+  }, [contentBounds, renderAnnotations]);
 
   useEffect(() => {
     annotationsRef.current = annotations;
@@ -245,34 +335,92 @@ export function AnnotationCanvas({
   }, [debugLog, renderAnnotations, toolMode]);
 
   useEffect(() => {
-    const canvasElement = canvasElementRef.current;
+    const previous = previousSessionKeyRef.current;
+    if (previous !== assetSessionKey) {
+      debugLog("asset key change", {
+        previous: previous ?? null,
+        next: assetSessionKey,
+      });
+      previousSessionKeyRef.current = assetSessionKey;
+    }
+  }, [assetSessionKey, debugLog]);
 
-    if (!canvasElement || fabricCanvasRef.current) {
+  useEffect(() => {
+    const host = hostRef.current;
+    if (observedHostRef.current === host) {
       return;
     }
 
-    const canvas = new Canvas(canvasElement, {
-      preserveObjectStacking: true,
-      selection: false,
+    debugLog("host element change", {
+      previousAttached: Boolean(observedHostRef.current),
+      nextAttached: Boolean(host),
     });
-    fabricCanvasRef.current = canvas;
 
-    const resize = () => {
-      const parent = canvasElement.parentElement;
-      if (!parent) {
+    if (observedHostRef.current && host && observedHostRef.current !== host && (fabricCanvasRef.current || canvasDomRef.current)) {
+      disposeFabricSession("host-change");
+    }
+
+    observedHostRef.current = host;
+  });
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) {
+      return;
+    }
+
+    if (initializingRef.current) {
+      return;
+    }
+
+    if (fabricCanvasRef.current && activeSessionKeyRef.current === assetSessionKey) {
+      return;
+    }
+
+    if (activeSessionKeyRef.current && activeSessionKeyRef.current !== assetSessionKey) {
+      disposeFabricSession("asset-key-change");
+    } else if (fabricCanvasRef.current || canvasDomRef.current) {
+      disposeFabricSession("reinit");
+    }
+
+    initializingRef.current = true;
+
+    const canvasElement = document.createElement("canvas");
+    canvasElement.className = "absolute inset-0 h-full w-full";
+    try {
+      if (fabricManagedCanvasNodes.has(canvasElement)) {
+        debugLog("fabric init skipped", { reason: "dom-node-already-managed" });
         return;
       }
 
-      const rect = parent.getBoundingClientRect();
-      const width = Math.max(1, rect.width);
-      const height = Math.max(1, rect.height);
+      host.appendChild(canvasElement);
+      canvasDomRef.current = canvasElement;
+      fabricManagedCanvasNodes.add(canvasElement);
 
-      sizeRef.current = { width, height };
-      canvas.setDimensions({ width, height });
-      renderAnnotations();
-    };
+      const canvas = new Canvas(canvasElement, {
+        preserveObjectStacking: true,
+        selection: false,
+      });
 
-    const handleMouseDown = (event: FabricPointerEvent) => {
+      debugLog("fabric init", {
+        assetSessionKey,
+        hostConnected: host.isConnected,
+      });
+
+      fabricCanvasRef.current = canvas;
+      activeSessionKeyRef.current = assetSessionKey;
+
+      const resize = () => {
+        const rect = host.getBoundingClientRect();
+        const width = Math.max(1, rect.width);
+        const height = Math.max(1, rect.height);
+
+        sizeRef.current = { width, height };
+        canvas.setDimensions({ width, height });
+        renderAnnotations();
+      };
+
+      const handleMouseDown = (event: FabricPointerEvent) => {
       debugLog("mouse:down", {
         mode: modeRef.current,
         tool: toolModeRef.current,
@@ -300,18 +448,25 @@ export function AnnotationCanvas({
         return;
       }
 
-      const pointer = readPointer(canvas, event);
+      const baselineBounds = getBaselineBounds();
+      const rawPointer = readPointer(canvas, event);
+      if (!isPointInBounds(rawPointer, baselineBounds)) {
+        return;
+      }
+      const pointer = clampPointToBounds(rawPointer, baselineBounds);
 
       if (currentTool === "pin") {
+        const normalizedX = toPercent(pointer.x - baselineBounds.x, baselineBounds.width);
+        const normalizedY = toPercent(pointer.y - baselineBounds.y, baselineBounds.height);
         callbacksRef.current.onCreateAnnotation?.({
           shapeType: "pin",
-          x: toPercent(pointer.x, sizeRef.current.width),
-          y: toPercent(pointer.y, sizeRef.current.height),
+          x: normalizedX,
+          y: normalizedY,
         });
         debugLog("annotation created", {
           shapeType: "pin",
-          x: toPercent(pointer.x, sizeRef.current.width),
-          y: toPercent(pointer.y, sizeRef.current.height),
+          x: normalizedX,
+          y: normalizedY,
         });
         return;
       }
@@ -354,31 +509,33 @@ export function AnnotationCanvas({
       };
     };
 
-    const handleMouseMove = (event: FabricPointerEvent) => {
+      const handleMouseMove = (event: FabricPointerEvent) => {
       const session = drawSessionRef.current;
       if (!session) {
         return;
       }
 
       const pointer = readPointer(canvas, event);
+      const baselineBounds = getBaselineBounds();
+      const clampedPointer = clampPointToBounds(pointer, baselineBounds);
       debugLog("mouse:move", {
         tool: session.toolMode,
-        x: pointer.x,
-        y: pointer.y,
+        x: clampedPointer.x,
+        y: clampedPointer.y,
       });
 
       if (session.toolMode === "arrow") {
         session.previewObject.set({
           x1: session.startX,
           y1: session.startY,
-          x2: pointer.x,
-          y2: pointer.y,
+          x2: clampedPointer.x,
+          y2: clampedPointer.y,
         });
       } else {
-        const left = Math.min(session.startX, pointer.x);
-        const top = Math.min(session.startY, pointer.y);
-        const width = Math.max(1, Math.abs(pointer.x - session.startX));
-        const height = Math.max(1, Math.abs(pointer.y - session.startY));
+        const left = Math.min(session.startX, clampedPointer.x);
+        const top = Math.min(session.startY, clampedPointer.y);
+        const width = Math.max(1, Math.abs(clampedPointer.x - session.startX));
+        const height = Math.max(1, Math.abs(clampedPointer.y - session.startY));
 
         session.previewObject.set({
           left,
@@ -391,24 +548,28 @@ export function AnnotationCanvas({
       canvas.requestRenderAll();
     };
 
-    const handleMouseUp = (event: FabricPointerEvent) => {
+      const handleMouseUp = (event: FabricPointerEvent) => {
       const session = drawSessionRef.current;
       if (!session) {
         return;
       }
 
       const pointer = readPointer(canvas, event);
+      const baselineBounds = getBaselineBounds();
+      const clampedPointer = clampPointToBounds(pointer, baselineBounds);
       debugLog("mouse:up", {
         tool: session.toolMode,
-        x: pointer.x,
-        y: pointer.y,
+        x: clampedPointer.x,
+        y: clampedPointer.y,
       });
       canvas.remove(session.previewObject);
       drawSessionRef.current = null;
 
       if (session.toolMode === "arrow") {
-        let width = toSignedPercent(pointer.x - session.startX, sizeRef.current.width);
-        let height = toSignedPercent(pointer.y - session.startY, sizeRef.current.height);
+        let width = toSignedPercent(clampedPointer.x - session.startX, baselineBounds.width);
+        let height = toSignedPercent(clampedPointer.y - session.startY, baselineBounds.height);
+        const normalizedX = toPercent(session.startX - baselineBounds.x, baselineBounds.width);
+        const normalizedY = toPercent(session.startY - baselineBounds.y, baselineBounds.height);
 
         if (Math.abs(width) < 0.8 && Math.abs(height) < 0.8) {
           width = 8;
@@ -417,15 +578,15 @@ export function AnnotationCanvas({
 
         callbacksRef.current.onCreateAnnotation?.({
           shapeType: "arrow",
-          x: toPercent(session.startX, sizeRef.current.width),
-          y: toPercent(session.startY, sizeRef.current.height),
+          x: normalizedX,
+          y: normalizedY,
           width,
           height,
         });
         debugLog("annotation created", {
           shapeType: "arrow",
-          x: toPercent(session.startX, sizeRef.current.width),
-          y: toPercent(session.startY, sizeRef.current.height),
+          x: normalizedX,
+          y: normalizedY,
           width,
           height,
         });
@@ -433,41 +594,46 @@ export function AnnotationCanvas({
         return;
       }
 
-      const left = Math.min(session.startX, pointer.x);
-      const right = Math.max(session.startX, pointer.x);
-      const top = Math.min(session.startY, pointer.y);
-      const bottom = Math.max(session.startY, pointer.y);
+      const left = Math.min(session.startX, clampedPointer.x);
+      const right = Math.max(session.startX, clampedPointer.x);
+      const top = Math.min(session.startY, clampedPointer.y);
+      const bottom = Math.max(session.startY, clampedPointer.y);
 
       const payload = {
         shapeType: session.toolMode,
-        x: toPercent((left + right) / 2, sizeRef.current.width),
-        y: toPercent((top + bottom) / 2, sizeRef.current.height),
-        width: Math.max(toPercent(right - left, sizeRef.current.width), 1),
-        height: Math.max(toPercent(bottom - top, sizeRef.current.height), 1),
+        x: toPercent((left + right) / 2 - baselineBounds.x, baselineBounds.width),
+        y: toPercent((top + bottom) / 2 - baselineBounds.y, baselineBounds.height),
+        width: Math.max(toPercent(right - left, baselineBounds.width), 1),
+        height: Math.max(toPercent(bottom - top, baselineBounds.height), 1),
       };
       callbacksRef.current.onCreateAnnotation?.(payload);
       debugLog("annotation created", payload);
     };
 
-    canvas.on("mouse:down", handleMouseDown);
-    canvas.on("mouse:move", handleMouseMove);
-    canvas.on("mouse:up", handleMouseUp);
+      canvas.on("mouse:down", handleMouseDown);
+      canvas.on("mouse:move", handleMouseMove);
+      canvas.on("mouse:up", handleMouseUp);
+      listenersRef.current = {
+        mouseDown: handleMouseDown,
+        mouseMove: handleMouseMove,
+        mouseUp: handleMouseUp,
+      };
 
-    const resizeObserver = new ResizeObserver(() => resize());
-    if (canvasElement.parentElement) {
-      resizeObserver.observe(canvasElement.parentElement);
+      const resizeObserver = new ResizeObserver(() => resize());
+      resizeObserver.observe(host);
+      resizeObserverRef.current = resizeObserver;
+      resize();
+      renderAnnotations();
+    } finally {
+      initializingRef.current = false;
     }
-    resize();
+  }, [assetSessionKey, debugLog, disposeFabricSession, getBaselineBounds, renderAnnotations]);
 
+  useEffect(() => {
     return () => {
-      resizeObserver.disconnect();
-      canvas.off("mouse:down", handleMouseDown);
-      canvas.off("mouse:move", handleMouseMove);
-      canvas.off("mouse:up", handleMouseUp);
-      canvas.dispose();
-      fabricCanvasRef.current = null;
+      disposeFabricSession("unmount");
     };
-  }, [debugLog, renderAnnotations]);
+  }, [disposeFabricSession]);
 
-  return <canvas ref={canvasElementRef} className="absolute inset-0 h-full w-full" />;
+  return <div ref={hostRef} className="absolute inset-0 h-full w-full" />;
 }

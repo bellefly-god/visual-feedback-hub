@@ -1,10 +1,10 @@
 import { MousePointer2, MessageCircle, PenTool, ArrowUpRight, Square, Highlighter, Type, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, type ComponentType } from "react";
+import type { ComponentType } from "react";
 import { annotationTools, type AnnotationToolId } from "@/components/feedback/annotationTools";
 
 interface AnnotationToolbarProps {
-  activeTool?: AnnotationToolId;
+  activeTool: AnnotationToolId;
   onToolChange?: (tool: AnnotationToolId) => void;
 }
 
@@ -22,18 +22,11 @@ const iconByTool: Record<AnnotationToolId, ComponentType<{ className?: string }>
 const disabledTools = new Set<AnnotationToolId>(["voice", "pen", "text"]);
 
 export function AnnotationToolbar({ activeTool: controlledTool, onToolChange }: AnnotationToolbarProps) {
-  const [internalTool, setInternalTool] = useState<AnnotationToolId>("pin");
-  const isControlled = controlledTool !== undefined;
-  const activeTool = controlledTool ?? internalTool;
-
   const setTool = (tool: AnnotationToolId) => {
     if (disabledTools.has(tool)) {
       return;
     }
 
-    if (!isControlled) {
-      setInternalTool(tool);
-    }
     onToolChange?.(tool);
   };
 
@@ -51,7 +44,7 @@ export function AnnotationToolbar({ activeTool: controlledTool, onToolChange }: 
             className={cn(
               "flex h-7 w-7 items-center justify-center rounded-md transition-all duration-100",
               disabledTools.has(tool.id) && "cursor-not-allowed opacity-45",
-              activeTool === tool.id
+              controlledTool === tool.id
                 ? "bg-foreground text-background shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}

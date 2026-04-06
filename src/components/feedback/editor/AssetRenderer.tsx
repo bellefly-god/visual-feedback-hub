@@ -1,5 +1,6 @@
 import { AssetPreview } from "@/components/feedback/AssetPreview";
 import type { AssetType } from "@/types/feedback";
+import type { CanvasContentBounds } from "@/components/feedback/editor/contentBounds";
 
 interface AssetRendererProps {
   assetType: AssetType;
@@ -7,6 +8,7 @@ interface AssetRendererProps {
   page?: number;
   onPageChange?: (nextPage: number) => void;
   onPageCountChange?: (count: number) => void;
+  onContentBoundsChange?: (bounds: CanvasContentBounds | null) => void;
 }
 
 export function AssetRenderer({
@@ -15,6 +17,7 @@ export function AssetRenderer({
   page,
   onPageChange,
   onPageCountChange,
+  onContentBoundsChange,
 }: AssetRendererProps) {
   return (
     <AssetPreview
@@ -23,6 +26,7 @@ export function AssetRenderer({
       page={page}
       onPageChange={onPageChange}
       onPageCountChange={onPageCountChange}
+      onContentBoundsChange={onContentBoundsChange}
     />
   );
 }
