@@ -1,6 +1,7 @@
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { canTransitionStatus, deriveProjectStatus } from "@/lib/status";
 import { supabase } from "@/services/supabaseClient";
+import { isUuid } from "@/lib/routePaths";
 import type {
   CommentStatus,
   CommentView,
@@ -90,13 +91,6 @@ type CreateReplyInput = {
   authorName: string;
   content: string;
 };
-
-const uuidPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isUuid(value: string): boolean {
-  return uuidPattern.test(value);
-}
 
 function toSafeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
