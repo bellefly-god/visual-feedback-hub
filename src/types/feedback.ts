@@ -22,6 +22,7 @@ export interface CommentRecord {
   y: number;
   width?: number;
   height?: number;
+  color?: string;
   shapeType: AnnotationShape;
   content: string;
   voiceNoteUrl?: string;
@@ -66,6 +67,7 @@ export interface CommentView {
   y: number;
   width?: number;
   height?: number;
+  color?: string;
   page?: number;
   pinNumber: number;
   replies: CommentReplyView[];

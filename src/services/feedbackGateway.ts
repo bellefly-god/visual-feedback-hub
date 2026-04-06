@@ -23,6 +23,7 @@ type CreateCommentInput = {
   y: number;
   width?: number;
   height?: number;
+  color?: string;
   page?: number;
   authorName: string;
   shapeType?: "pin" | "arrow" | "rectangle" | "highlight";

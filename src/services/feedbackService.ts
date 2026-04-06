@@ -35,6 +35,7 @@ interface CreateCommentInput {
   y: number;
   width?: number;
   height?: number;
+  color?: string;
   page?: number;
   authorName: string;
   shapeType?: AnnotationShape;
@@ -143,6 +144,7 @@ function toCommentViews(store: FeedbackStore, projectId: string): CommentView[] 
       y: comment.y,
       width: comment.width,
       height: comment.height,
+      color: comment.color,
       page: comment.page,
       pinNumber: index + 1,
       replies,
@@ -266,6 +268,7 @@ export const feedbackService = {
       y: input.y,
       width: input.width,
       height: input.height,
+      color: input.color,
       shapeType: input.shapeType ?? "pin",
       content: input.content,
       status: "pending",

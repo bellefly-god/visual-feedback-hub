@@ -29,6 +29,7 @@ type CommentRow = {
   y: number;
   width: number | null;
   height: number | null;
+  color: string | null;
   shape_type: "pin" | "arrow" | "rectangle" | "highlight";
   content: string;
   voice_note_url: string | null;
@@ -75,6 +76,7 @@ type CreateCommentInput = {
   y: number;
   width?: number;
   height?: number;
+  color?: string;
   page?: number;
   authorName: string;
   shapeType?: "pin" | "arrow" | "rectangle" | "highlight";
@@ -116,6 +118,18 @@ function assertSupabase() {
 
 function getNowIso() {
   return new Date().toISOString();
+}
+
+function isMissingColorColumnError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) {
+    return false;
+  }
+
+  return (
+    error.code === "PGRST204" ||
+    error.code === "42703" ||
+    error.message?.toLowerCase().includes("column") === true && error.message.toLowerCase().includes("color")
+  );
 }
 
 function toRelativeTimeLabel(iso: string): string {
@@ -199,6 +213,7 @@ function toCommentView(comment: CommentRow, pinNumber: number, replies: ReplyRec
     y: comment.y,
     width: comment.width ?? undefined,
     height: comment.height ?? undefined,
+    color: comment.color ?? undefined,
     page: comment.page ?? undefined,
     pinNumber,
     replies: replies.map((reply) => ({
@@ -362,8 +377,7 @@ export const supabaseFeedbackService = {
   async createComment(input: CreateCommentInput): Promise<CommentView[]> {
     const db = assertSupabase();
     const now = getNowIso();
-
-    const { error } = await db.from("comments").insert({
+    const payload = {
       id: crypto.randomUUID(),
       project_id: input.projectId,
       page: input.page ?? null,
@@ -371,13 +385,34 @@ export const supabaseFeedbackService = {
       y: input.y,
       width: input.width ?? null,
       height: input.height ?? null,
+      color: input.color ?? null,
       shape_type: input.shapeType ?? "pin",
       content: input.content,
       status: "pending",
       author_name: input.authorName,
       created_at: now,
       updated_at: now,
-    });
+    };
+
+    let { error } = await db.from("comments").insert(payload);
+    if (isMissingColorColumnError(error)) {
+      const legacyPayload: Omit<typeof payload, "color"> = {
+        id: payload.id,
+        project_id: payload.project_id,
+        page: payload.page,
+        x: payload.x,
+        y: payload.y,
+        width: payload.width,
+        height: payload.height,
+        shape_type: payload.shape_type,
+        content: payload.content,
+        status: payload.status,
+        author_name: payload.author_name,
+        created_at: payload.created_at,
+        updated_at: payload.updated_at,
+      };
+      ({ error } = await db.from("comments").insert(legacyPayload));
+    }
 
     if (error) {
       throw error;

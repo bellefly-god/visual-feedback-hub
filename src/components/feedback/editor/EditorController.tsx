@@ -8,35 +8,40 @@ import { Button } from "@/components/ui/button";
 import { DEMO_PROJECT_ID, normalizeProjectId, routePaths } from "@/lib/routePaths";
 import { feedbackGateway } from "@/services/feedbackGateway";
 import type { CommentView } from "@/types/feedback";
-import { AnnotationCanvas, type CreateAnnotationPayload, type NormalizedAnnotation } from "@/components/feedback/editor/AnnotationCanvas";
-import { AssetRenderer } from "@/components/feedback/editor/AssetRenderer";
 import { CommentSidebar } from "@/components/feedback/editor/CommentSidebar";
-import { toToolMode, type AnnotationShapeMode, type ToolMode } from "@/components/feedback/editor/toolMode";
-import type { CanvasContentBounds } from "@/components/feedback/editor/contentBounds";
-
-type PendingAnnotation = CreateAnnotationPayload & {
-  page?: number;
-};
-
-const DRAFT_ANNOTATION_ID = "draft-annotation";
+import { EditorSurface } from "@/features/editor/containers/EditorSurface";
+import { useToolModeState, toToolMode } from "@/features/editor/shared/state/useToolMode";
+import { useSelectedAnnotationState } from "@/features/editor/shared/state/useSelectedAnnotation";
+import type { AnnotationShapeMode, CreateAnnotationPayload } from "@/features/editor/shared/types/annotation";
+import { DEFAULT_ANNOTATION_COLOR, sanitizeAnnotationColor } from "@/features/editor/shared/colors/annotationColor";
+import {
+  commentsToAnnotations,
+  DRAFT_ANNOTATION_ID,
+  type PendingAnnotation,
+  resolveSelectedCommentId,
+  withPendingAnnotation,
+} from "@/features/editor/shared/links/commentAnnotationLink";
 
 export function EditorController() {
-  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+  const {
+    selectedAnnotationId: activeCommentId,
+    setSelectedAnnotationId: setActiveCommentId,
+  } = useSelectedAnnotationState();
   const [showShare, setShowShare] = useState(false);
   const [projectName, setProjectName] = useState("Homepage Redesign v2");
   const [assetType, setAssetType] = useState<"image" | "pdf" | "screenshot">("screenshot");
   const [assetUrl, setAssetUrl] = useState("");
   const [comments, setComments] = useState<CommentView[]>([]);
   const [shareToken, setShareToken] = useState<string | null>(null);
-  const [toolMode, setToolMode] = useState<ToolMode>("pin");
+  const { toolMode, setToolMode } = useToolModeState("pin");
   const [draftComment, setDraftComment] = useState("");
   const [pendingAnnotation, setPendingAnnotation] = useState<PendingAnnotation | null>(null);
+  const [activeAnnotationColor, setActiveAnnotationColor] = useState(DEFAULT_ANNOTATION_COLOR);
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState(1);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [editorMessage, setEditorMessage] = useState<string | null>(null);
-  const [contentBounds, setContentBounds] = useState<CanvasContentBounds | null>(null);
   const isDebugEnabled = import.meta.env.DEV;
 
   const navigate = useNavigate();
@@ -66,47 +71,16 @@ export function EditorController() {
 
   const activeComment = visibleComments.find((comment) => comment.id === activeCommentId) ?? null;
 
-  const canvasAnnotations = useMemo<NormalizedAnnotation[]>(() => {
-    const savedAnnotations: NormalizedAnnotation[] = visibleComments.map((comment) => ({
-      id: comment.id,
-      shapeType: comment.shapeType,
-      x: comment.x,
-      y: comment.y,
-      width: comment.width,
-      height: comment.height,
-      pinNumber: comment.pinNumber,
-    }));
-
-    if (!pendingAnnotation) {
-      return savedAnnotations;
-    }
-
-    return [
-      ...savedAnnotations,
-      {
-        id: DRAFT_ANNOTATION_ID,
-        shapeType: pendingAnnotation.shapeType,
-        x: pendingAnnotation.x,
-        y: pendingAnnotation.y,
-        width: pendingAnnotation.width,
-        height: pendingAnnotation.height,
-      },
-    ];
-  }, [pendingAnnotation, visibleComments]);
+  const canvasAnnotations = useMemo(
+    () => withPendingAnnotation(commentsToAnnotations(visibleComments), pendingAnnotation),
+    [pendingAnnotation, visibleComments],
+  );
 
   const reviewPath = useMemo(() => {
     return routePaths.review(shareToken ?? `share-${resolvedProjectId}`);
   }, [resolvedProjectId, shareToken]);
 
   const shareLink = useMemo(() => `${window.location.origin}${reviewPath}`, [reviewPath]);
-  const assetSessionKey = useMemo(() => {
-    const base = `${assetType}:${assetUrl || "empty"}`;
-    if (assetType !== "pdf") {
-      return base;
-    }
-
-    return `${base}:page-${currentPdfPage}`;
-  }, [assetType, assetUrl, currentPdfPage]);
 
   const clampZoom = (value: number) => Math.max(0.5, Math.min(3, value));
 
@@ -140,13 +114,7 @@ export function EditorController() {
       setAssetUrl(ensuredProject.assetUrl);
       setComments(nextComments);
       setShareToken(existingShareLink?.token ?? null);
-      setActiveCommentId((current) => {
-        if (current && nextComments.some((comment) => comment.id === current)) {
-          return current;
-        }
-
-        return nextComments[0]?.id ?? null;
-      });
+      setActiveCommentId((current) => resolveSelectedCommentId(current, nextComments));
     };
 
     void load();
@@ -154,17 +122,11 @@ export function EditorController() {
     return () => {
       isMounted = false;
     };
-  }, [resolvedProjectId, stateProjectName]);
+  }, [resolvedProjectId, setActiveCommentId, stateProjectName]);
 
   useEffect(() => {
-    setActiveCommentId((current) => {
-      if (current && visibleComments.some((comment) => comment.id === current)) {
-        return current;
-      }
-
-      return visibleComments[0]?.id ?? null;
-    });
-  }, [visibleComments]);
+    setActiveCommentId((current) => resolveSelectedCommentId(current, visibleComments));
+  }, [setActiveCommentId, visibleComments]);
 
   useEffect(() => {
     if (assetType !== "pdf") {
@@ -177,10 +139,6 @@ export function EditorController() {
       setPendingAnnotation(null);
     }
   }, [assetType, currentPdfPage, pendingAnnotation?.page]);
-
-  useEffect(() => {
-    setContentBounds(null);
-  }, [assetType, assetUrl, currentPdfPage]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -221,13 +179,7 @@ export function EditorController() {
 
   const applyNextComments = (nextComments: CommentView[]) => {
     setComments(nextComments);
-    setActiveCommentId((current) => {
-      if (current && nextComments.some((comment) => comment.id === current)) {
-        return current;
-      }
-
-      return nextComments[0]?.id ?? null;
-    });
+    setActiveCommentId((current) => resolveSelectedCommentId(current, nextComments));
   };
 
   const handleSaveFeedback = async () => {
@@ -254,6 +206,10 @@ export function EditorController() {
   };
 
   const handleCanvasWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (assetType !== "pdf") {
+      return;
+    }
+
     if (!event.ctrlKey && !event.metaKey) {
       return;
     }
@@ -288,6 +244,7 @@ export function EditorController() {
       y: pendingAnnotation.y,
       width: shapeType === "pin" ? undefined : pendingAnnotation.width,
       height: shapeType === "pin" ? undefined : pendingAnnotation.height,
+      color: pendingAnnotation.color,
       page: pendingAnnotation.page,
       authorName: "You",
       shapeType,
@@ -319,8 +276,6 @@ export function EditorController() {
     }
   };
 
-  const cursorClass = toolMode === "select" ? "cursor-default" : "cursor-crosshair";
-
   return (
     <div className="flex h-screen flex-col bg-background">
       <Navbar />
@@ -340,6 +295,7 @@ export function EditorController() {
         <div className="flex items-center gap-2.5">
           <AnnotationToolbar
             activeTool={toolMode}
+            selectedColor={activeAnnotationColor}
             onToolChange={(tool) => {
               const nextMode = toToolMode(tool);
               setToolMode(nextMode);
@@ -351,6 +307,7 @@ export function EditorController() {
                     : "Drag on the canvas to draw annotation.",
               );
             }}
+            onColorChange={(color) => setActiveAnnotationColor(sanitizeAnnotationColor(color))}
           />
 
           <div className="inline-flex items-center rounded-lg border border-border/60">
@@ -359,6 +316,7 @@ export function EditorController() {
               className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               onClick={() => stepZoom(-0.1)}
               title="Zoom out (Ctrl/Cmd + -)"
+              disabled={assetType !== "pdf"}
             >
               <ZoomOut className="h-3.5 w-3.5" />
             </button>
@@ -370,6 +328,7 @@ export function EditorController() {
               className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               onClick={() => stepZoom(0.1)}
               title="Zoom in (Ctrl/Cmd + +)"
+              disabled={assetType !== "pdf"}
             >
               <ZoomIn className="h-3.5 w-3.5" />
             </button>
@@ -424,27 +383,21 @@ export function EditorController() {
         <div className="relative flex-1 overflow-auto p-10">
           <div className="mx-auto aspect-[16/10] max-w-4xl rounded-xl border border-border/60 bg-card">
             <div
-              className={`relative h-full w-full rounded-xl bg-gradient-to-br from-muted/30 to-background ${cursorClass}`}
+              className="relative h-full w-full rounded-xl bg-gradient-to-br from-muted/30 to-background"
               onWheel={handleCanvasWheel}
             >
               <div className="h-full w-full overflow-auto">
-                <div className="relative h-full w-full" style={{ zoom: zoomLevel }}>
-                  <AssetRenderer
+                <div className="relative h-full w-full" style={assetType === "pdf" ? { zoom: zoomLevel } : undefined}>
+                  <EditorSurface
                     assetType={assetType}
                     assetUrl={assetUrl}
-                    page={assetType === "pdf" ? currentPdfPage : undefined}
-                    onPageChange={assetType === "pdf" ? setCurrentPdfPage : undefined}
-                    onPageCountChange={assetType === "pdf" ? setPdfPageCount : undefined}
-                    onContentBoundsChange={setContentBounds}
-                  />
-
-                  <AnnotationCanvas
-                    mode="editor"
                     toolMode={toolMode}
-                    assetSessionKey={assetSessionKey}
                     annotations={canvasAnnotations}
                     selectedAnnotationId={activeCommentId}
-                    contentBounds={contentBounds}
+                    currentPdfPage={currentPdfPage}
+                    onPdfPageChange={setCurrentPdfPage}
+                    onPdfPageCountChange={setPdfPageCount}
+                    activeColor={activeAnnotationColor}
                     onSelectAnnotation={(annotationId) => {
                       debugLog("selection changed", { selectedAnnotationId: annotationId });
                       if (!annotationId || annotationId === DRAFT_ANNOTATION_ID) {

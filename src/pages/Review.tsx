@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CommentCard } from "@/components/feedback/CommentCard";
-import { AssetPreview } from "@/components/feedback/AssetPreview";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MessageSquare, CheckCircle2, RotateCcw, Send } from "lucide-react";
@@ -8,8 +7,8 @@ import { useParams } from "react-router-dom";
 import { DEMO_REVIEW_TOKEN } from "@/lib/routePaths";
 import { feedbackGateway } from "@/services/feedbackGateway";
 import type { CommentView } from "@/types/feedback";
-import { AnnotationCanvas, type NormalizedAnnotation } from "@/components/feedback/editor/AnnotationCanvas";
-import type { CanvasContentBounds } from "@/components/feedback/editor/contentBounds";
+import { ReviewSurface } from "@/features/editor/containers/ReviewSurface";
+import { commentsToAnnotations } from "@/features/editor/shared/links/commentAnnotationLink";
 
 export default function ReviewPage() {
   const [activeComment, setActiveComment] = useState<string | null>(null);
@@ -21,7 +20,6 @@ export default function ReviewPage() {
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState(1);
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
-  const [contentBounds, setContentBounds] = useState<CanvasContentBounds | null>(null);
   const isDebugEnabled = import.meta.env.DEV;
   const { token } = useParams<{ token: string }>();
 
@@ -42,28 +40,8 @@ export default function ReviewPage() {
 
     return comments.filter((comment) => (comment.page ?? 1) === currentPdfPage);
   }, [assetType, comments, currentPdfPage]);
-  const visibleAnnotations = useMemo<NormalizedAnnotation[]>(
-    () =>
-      visibleComments.map((comment) => ({
-        id: comment.id,
-        shapeType: comment.shapeType,
-        x: comment.x,
-        y: comment.y,
-        width: comment.width,
-        height: comment.height,
-        pinNumber: comment.pinNumber,
-      })),
-    [visibleComments],
-  );
+  const visibleAnnotations = useMemo(() => commentsToAnnotations(visibleComments), [visibleComments]);
   const active = visibleComments.find((c) => c.id === activeComment);
-  const assetSessionKey = useMemo(() => {
-    const base = `${assetType}:${assetUrl || "empty"}`;
-    if (assetType !== "pdf") {
-      return base;
-    }
-
-    return `${base}:page-${currentPdfPage}`;
-  }, [assetType, assetUrl, currentPdfPage]);
 
   const applyNextComments = (nextComments: CommentView[]) => {
     setComments(nextComments);
@@ -136,10 +114,6 @@ export default function ReviewPage() {
       setPdfPageCount(1);
     }
   }, [assetType]);
-
-  useEffect(() => {
-    setContentBounds(null);
-  }, [assetType, assetUrl, currentPdfPage]);
 
   useEffect(() => {
     if (assetType !== "pdf") {
@@ -221,21 +195,14 @@ export default function ReviewPage() {
           </div>
           <div className="mx-auto aspect-[16/10] max-w-4xl rounded-xl border border-border/60 bg-card">
             <div className="relative h-full w-full rounded-xl bg-gradient-to-br from-muted/30 to-background">
-              <AssetPreview
+              <ReviewSurface
                 assetType={assetType}
                 assetUrl={assetUrl}
-                page={assetType === "pdf" ? currentPdfPage : undefined}
-                onPageChange={assetType === "pdf" ? setCurrentPdfPage : undefined}
-                onPageCountChange={assetType === "pdf" ? setPdfPageCount : undefined}
-                onContentBoundsChange={setContentBounds}
-              />
-              <AnnotationCanvas
-                mode="review"
-                toolMode="select"
-                assetSessionKey={assetSessionKey}
                 annotations={visibleAnnotations}
                 selectedAnnotationId={activeComment}
-                contentBounds={contentBounds}
+                currentPdfPage={currentPdfPage}
+                onPdfPageChange={setCurrentPdfPage}
+                onPdfPageCountChange={setPdfPageCount}
                 onSelectAnnotation={(annotationId) => {
                   debugLog("selection changed", { selectedAnnotationId: annotationId });
                   setActiveComment(annotationId);

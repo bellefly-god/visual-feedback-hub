@@ -21,6 +21,7 @@ create table if not exists public.comments (
   y double precision not null,
   width double precision,
   height double precision,
+  color text not null default '#2563eb',
   shape_type text not null check (shape_type in ('pin','arrow','rectangle','highlight')),
   content text not null,
   voice_note_url text,
@@ -52,6 +53,9 @@ create index if not exists idx_comments_status on public.comments(status);
 create index if not exists idx_replies_comment_id on public.replies(comment_id);
 create index if not exists idx_share_links_project_id on public.share_links(project_id);
 create index if not exists idx_share_links_token on public.share_links(token);
+
+alter table public.comments
+  add column if not exists color text not null default '#2563eb';
 
 -- MVP mode: keep public access simple.
 alter table public.projects disable row level security;
