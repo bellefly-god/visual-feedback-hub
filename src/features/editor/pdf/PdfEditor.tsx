@@ -86,8 +86,8 @@ export function PdfEditor({
   }
 
   return (
-    <div className="relative h-full w-full overflow-auto rounded-xl bg-muted/20">
-      <div className="relative inline-block" style={{ transform: `scale(${zoomLevel})`, transformOrigin: "top left" }}>
+    <div className="relative h-full w-full overflow-hidden rounded-xl bg-muted/20">
+      <div className="relative h-full w-full">
         <PdfPageCanvas
           src={assetUrl}
           page={page}

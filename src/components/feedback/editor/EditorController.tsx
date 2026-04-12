@@ -394,11 +394,13 @@ export function EditorController() {
         };
         setTextAnnotations((prev) => [...prev, newTextAnnotation]);
         setActiveCommentId(newTextAnnotation.id);
-        setEditorMessage("Click the text to edit.");
+        setEditorMessage("Click the text to edit, or click Submit to skip adding a comment.");
       });
       return;
     }
 
+    // Simplified flow: create annotation directly as pending comment
+    // Comments are optional - user can add comment or discard
     recordImageAction(() => {
       debugLog("annotation creation requested", payload);
       setPendingAnnotation({
@@ -409,7 +411,7 @@ export function EditorController() {
         page: assetType === "pdf" ? currentPdfPage : undefined,
       });
       setActiveCommentId(null);
-      setEditorMessage("Annotation placed. Add comment for this draft.");
+      setEditorMessage("Annotation created. Add a comment (optional) or press Skip to discard.");
     });
   };
 
@@ -431,9 +433,9 @@ export function EditorController() {
   };
 
   const handleSubmitComment = async () => {
-    const content = draftComment.trim();
+    const content = draftComment.trim() || "No comment"; // Allow empty comments with default text
 
-    if (!content || !pendingAnnotation) {
+    if (!pendingAnnotation) {
       return;
     }
 

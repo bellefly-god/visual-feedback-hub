@@ -63,13 +63,13 @@ export function CommentSidebar({
       {isCommentMode && (
         <div className="space-y-2 border-b border-border/60 px-3 pb-3">
           <p className="text-[12px] text-muted-foreground">
-            Choose a position or draw an annotation, then add your comment.
+            Annotation created. Add a comment (optional) or skip.
           </p>
           <Textarea
             ref={draftInputRef}
             value={draftComment}
             onChange={(event) => onDraftCommentChange(event.target.value)}
-            placeholder="Describe the feedback..."
+            placeholder="Describe the feedback (optional)..."
             className="min-h-[80px] resize-none text-[13px]"
           />
           <div className="flex gap-2">
@@ -77,12 +77,12 @@ export function CommentSidebar({
               size="sm"
               className="h-8 flex-1 text-[12px]"
               onClick={onSubmitComment}
-              disabled={!draftComment.trim() || !hasPendingAnnotation}
+              disabled={!hasPendingAnnotation}
             >
-              Add Comment
+              Submit
             </Button>
             <Button size="sm" variant="outline" className="h-8 flex-1 text-[12px]" onClick={onCancelDraft}>
-              Cancel
+              Skip
             </Button>
           </div>
         </div>
