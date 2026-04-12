@@ -12,6 +12,7 @@ interface CommentSidebarProps {
   isCommentMode: boolean;
   hasPendingAnnotation: boolean;
   draftComment: string;
+  saveState?: "idle" | "saving" | "saved";
   onDraftCommentChange: (value: string) => void;
   onSelectComment: (commentId: string) => void;
   onRequestPinMode: () => void;
@@ -27,6 +28,7 @@ export function CommentSidebar({
   isCommentMode,
   hasPendingAnnotation,
   draftComment,
+  saveState = "idle",
   onDraftCommentChange,
   onSelectComment,
   onRequestPinMode,
@@ -77,11 +79,11 @@ export function CommentSidebar({
               size="sm"
               className="h-8 flex-1 text-[12px]"
               onClick={onSubmitComment}
-              disabled={!hasPendingAnnotation}
+              disabled={!hasPendingAnnotation || saveState === "saving"}
             >
-              Submit
+              {saveState === "saving" ? "Saving..." : "Submit"}
             </Button>
-            <Button size="sm" variant="outline" className="h-8 flex-1 text-[12px]" onClick={onCancelDraft}>
+            <Button size="sm" variant="outline" className="h-8 flex-1 text-[12px]" onClick={onCancelDraft} disabled={saveState === "saving"}>
               Skip
             </Button>
           </div>

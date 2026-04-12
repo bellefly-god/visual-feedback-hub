@@ -34,11 +34,10 @@ const editorTools: Array<{ id: AnnotationToolId; label: string }> = [
   { id: "pin", label: "Pin" },
   { id: "pen", label: "Pen" },
   { id: "arrow", label: "Arrow" },
-  { id: "rectangle", label: "Rectangle" },
   { id: "text", label: "Text" },
   { id: "highlight", label: "Highlight" },
 ];
-const colorEnabledTools = new Set<AnnotationToolId>(["pin", "pen", "arrow", "rectangle", "highlight", "text"]);
+const colorEnabledTools = new Set<AnnotationToolId>(["pin", "pen", "arrow", "highlight", "text"]);
 
 export function AnnotationToolbar({
   activeTool: controlledTool,

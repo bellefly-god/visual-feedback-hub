@@ -427,9 +427,8 @@ export function EditorController() {
         prev.map((a) => (a.id === annotationId ? { ...a, textContent: text } : a)),
       );
     });
-    // Reset to pin mode after committing text
-    setToolMode("pin");
-    setEditorMessage("Text added. Press Enter to add a comment.");
+    // Keep text tool mode active for adding more text annotations
+    setEditorMessage("Text added. Click to edit or continue adding text.");
   };
 
   const handleSubmitComment = async () => {
@@ -439,31 +438,42 @@ export function EditorController() {
       return;
     }
 
-    const shapeType: AnnotationShapeMode = pendingAnnotation.shapeType;
+    // Show saving state
+    setSaveState("saving");
+    setEditorMessage("Submitting...");
 
-    const nextComments = await feedbackGateway.createComment({
-      projectId: resolvedProjectId,
-      content,
-      x: pendingAnnotation.x,
-      y: pendingAnnotation.y,
-      width: shapeType === "pin" ? undefined : pendingAnnotation.width,
-      height: shapeType === "pin" ? undefined : pendingAnnotation.height,
-      pathPoints: pendingAnnotation.pathPoints,
-      color: pendingAnnotation.color,
-      page: pendingAnnotation.page,
-      authorName: "You",
-      shapeType,
-    });
+    try {
+      const shapeType: AnnotationShapeMode = pendingAnnotation.shapeType;
 
-    if (isImageEditor) {
-      pushHistorySnapshot(captureHistorySnapshot());
+      const nextComments = await feedbackGateway.createComment({
+        projectId: resolvedProjectId,
+        content,
+        x: pendingAnnotation.x,
+        y: pendingAnnotation.y,
+        width: shapeType === "pin" ? undefined : pendingAnnotation.width,
+        height: shapeType === "pin" ? undefined : pendingAnnotation.height,
+        pathPoints: pendingAnnotation.pathPoints,
+        color: pendingAnnotation.color,
+        page: pendingAnnotation.page,
+        authorName: "You",
+        shapeType,
+      });
+
+      if (isImageEditor) {
+        pushHistorySnapshot(captureHistorySnapshot());
+      }
+
+      applyNextComments(nextComments);
+      setDraftComment("");
+      setPendingAnnotation(null);
+      setEditorMessage("Comment submitted successfully.");
+      setActiveCommentId(nextComments[nextComments.length - 1]?.id ?? null);
+      setSaveState("saved");
+    } catch (error) {
+      console.error("Failed to submit comment:", error);
+      setEditorMessage("Failed to submit comment. Please try again.");
+      setSaveState("idle");
     }
-
-    applyNextComments(nextComments);
-    setDraftComment("");
-    setPendingAnnotation(null);
-    setEditorMessage(null);
-    setActiveCommentId(nextComments[nextComments.length - 1]?.id ?? null);
   };
 
   const handleMarkFixed = async () => {
@@ -578,6 +588,7 @@ export function EditorController() {
           isCommentMode={isCommentMode}
           hasPendingAnnotation={Boolean(pendingAnnotation)}
           draftComment={draftComment}
+          saveState={saveState}
           onDraftCommentChange={setDraftComment}
           onSelectComment={(commentId) => {
             debugLog("selection changed", { selectedAnnotationId: commentId });
