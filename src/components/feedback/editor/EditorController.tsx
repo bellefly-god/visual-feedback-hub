@@ -28,6 +28,7 @@ interface AnnotationHistorySnapshot {
   pendingAnnotation: PendingAnnotation | null;
   activeCommentId: string | null;
   draftComment: string;
+  textAnnotations: NormalizedAnnotation[];
 }
 
 interface AnnotationHistoryState {
@@ -50,6 +51,7 @@ function cloneHistorySnapshot(snapshot: AnnotationHistorySnapshot): AnnotationHi
     pendingAnnotation: snapshot.pendingAnnotation ? { ...snapshot.pendingAnnotation } : null,
     activeCommentId: snapshot.activeCommentId,
     draftComment: snapshot.draftComment,
+    textAnnotations: snapshot.textAnnotations.map((a) => ({ ...a })),
   };
 }
 
@@ -135,8 +137,9 @@ export function EditorController() {
       pendingAnnotation: pendingAnnotation ? { ...pendingAnnotation } : null,
       activeCommentId,
       draftComment,
+      textAnnotations: textAnnotations.map((a) => ({ ...a })),
     };
-  }, [activeCommentId, comments, draftComment, pendingAnnotation]);
+  }, [activeCommentId, comments, draftComment, pendingAnnotation, textAnnotations]);
 
   const applyHistorySnapshot = useCallback(
     (snapshot: AnnotationHistorySnapshot) => {
@@ -144,6 +147,7 @@ export function EditorController() {
       setPendingAnnotation(snapshot.pendingAnnotation ? { ...snapshot.pendingAnnotation } : null);
       setActiveCommentId(snapshot.activeCommentId);
       setDraftComment(snapshot.draftComment);
+      setTextAnnotations(snapshot.textAnnotations.map((a) => ({ ...a })));
       setEditorMessage(null);
     },
     [setActiveCommentId],
@@ -379,17 +383,19 @@ export function EditorController() {
 
     if (payload.shapeType === "text") {
       // Text annotations: create inline and manage separately
-      const newTextAnnotation: NormalizedAnnotation = {
-        id: createDraftAnnotationId(),
-        displayOrder: allAnnotations.length + 1,
-        status: "draft",
-        ...payload,
-        color: sanitizeAnnotationColor(payload.color),
-        page: assetType === "pdf" ? currentPdfPage : undefined,
-      };
-      setTextAnnotations((prev) => [...prev, newTextAnnotation]);
-      setActiveCommentId(newTextAnnotation.id);
-      setEditorMessage("Click the text to edit.");
+      recordImageAction(() => {
+        const newTextAnnotation: NormalizedAnnotation = {
+          id: createDraftAnnotationId(),
+          displayOrder: allAnnotations.length + 1,
+          status: "draft",
+          ...payload,
+          color: sanitizeAnnotationColor(payload.color),
+          page: assetType === "pdf" ? currentPdfPage : undefined,
+        };
+        setTextAnnotations((prev) => [...prev, newTextAnnotation]);
+        setActiveCommentId(newTextAnnotation.id);
+        setEditorMessage("Click the text to edit.");
+      });
       return;
     }
 
@@ -414,9 +420,11 @@ export function EditorController() {
   };
 
   const handleTextCommit = (annotationId: string, text: string) => {
-    setTextAnnotations((prev) =>
-      prev.map((a) => (a.id === annotationId ? { ...a, textContent: text } : a)),
-    );
+    recordImageAction(() => {
+      setTextAnnotations((prev) =>
+        prev.map((a) => (a.id === annotationId ? { ...a, textContent: text } : a)),
+      );
+    });
     // Reset to pin mode after committing text
     setToolMode("pin");
     setEditorMessage("Text added. Press Enter to add a comment.");

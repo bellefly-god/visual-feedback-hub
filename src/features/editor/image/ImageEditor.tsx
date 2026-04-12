@@ -90,6 +90,7 @@ export function ImageEditor({
     bounds,
     activeColor: safeColor,
     interactionScale: transform.zoom,
+    annotations,
     onSelectAnnotation: (id) => {
       onSelectAnnotation(id);
       if (id) {
