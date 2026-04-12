@@ -195,6 +195,20 @@ export function useImageInteractions({
         return;
       }
 
+      if (toolMode === "text") {
+        const normalizedPoint = toNormalizedPoint(bounds, clampedPoint);
+        onCreateAnnotation?.({
+          shapeType: "text",
+          x: normalizedPoint.x,
+          y: normalizedPoint.y,
+          width: 100,
+          height: 30,
+          textContent: "",
+          color: activeColor,
+        });
+        return;
+      }
+
       if (toolMode === "pen") {
         const session: PenPreview = {
           toolMode: "pen",

@@ -37,3 +37,42 @@ export function getPdfRectGeometry(annotation: NormalizedAnnotation, bounds: Ove
     height,
   };
 }
+
+export function getPdfPenPathGeometry(annotation: NormalizedAnnotation, bounds: OverlayBounds) {
+  if (!annotation.pathPoints || annotation.pathPoints.length === 0) {
+    return "";
+  }
+
+  const absolutePoints = annotation.pathPoints.map((point) =>
+    toAbsolutePoint(bounds, point.x, point.y)
+  );
+
+  if (absolutePoints.length === 1) {
+    return `M ${absolutePoints[0].x} ${absolutePoints[0].y}`;
+  }
+
+  const [first, ...rest] = absolutePoints;
+  return `M ${first.x} ${first.y} ${rest.map((point) => `L ${point.x} ${point.y}`).join(" ")}`;
+}
+
+export function getPdfAnnotationAnchor(annotation: NormalizedAnnotation, bounds: OverlayBounds) {
+  const shapeType = annotation.shapeType as string;
+
+  if (shapeType === "pin") {
+    const pin = getPdfPinGeometry(annotation, bounds);
+    return { x: pin.cx, y: pin.cy };
+  }
+
+  if (shapeType === "arrow") {
+    const arrow = getPdfArrowGeometry(annotation, bounds);
+    return { x: arrow.x1, y: arrow.y1 };
+  }
+
+  if (shapeType === "pen" && annotation.pathPoints && annotation.pathPoints.length > 0) {
+    const firstPoint = toAbsolutePoint(bounds, annotation.pathPoints[0].x, annotation.pathPoints[0].y);
+    return { x: firstPoint.x, y: firstPoint.y };
+  }
+
+  const rect = getPdfRectGeometry(annotation, bounds);
+  return { x: rect.x, y: rect.y };
+}

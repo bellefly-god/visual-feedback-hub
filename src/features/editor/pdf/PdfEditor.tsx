@@ -17,6 +17,10 @@ interface PdfEditorProps {
   onPageCountChange?: (count: number) => void;
   onSelectAnnotation: (annotationId: string | null) => void;
   onCreateAnnotation?: (payload: CreateAnnotationPayload) => void;
+  onTextEdit?: (annotationId: string, text: string) => void;
+  onTextCommit?: (annotationId: string, text: string) => void;
+  zoomLevel?: number;
+  onZoomChange?: (zoom: number) => void;
 }
 
 export function PdfEditor({
@@ -30,16 +34,48 @@ export function PdfEditor({
   onPageCountChange,
   onSelectAnnotation,
   onCreateAnnotation,
+  onTextEdit,
+  onTextCommit,
+  zoomLevel = 1,
+  onZoomChange,
 }: PdfEditorProps) {
   const [bounds, setBounds] = useState<OverlayBounds | null>(null);
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const colors = useAnnotationColors();
   const { handlers, preview } = usePdfInteractions({
     mode,
     toolMode,
     bounds,
-    onSelectAnnotation,
-    onCreateAnnotation,
+    activeColor: colors.stroke,
+    onSelectAnnotation: (id) => {
+      onSelectAnnotation(id);
+      if (id) {
+        const ann = annotations.find((a) => a.id === id);
+        if (ann?.shapeType === "text") {
+          setEditingTextId(id);
+        } else {
+          setEditingTextId(null);
+        }
+      } else {
+        setEditingTextId(null);
+      }
+    },
+    onCreateAnnotation: (payload) => {
+      onCreateAnnotation?.(payload);
+      if (payload.shapeType === "text") {
+        // Will be handled via annotation update
+      }
+    },
   });
+
+  const handleTextEdit = (annotationId: string, text: string) => {
+    onTextEdit?.(annotationId, text);
+  };
+
+  const handleTextCommit = (annotationId: string, text: string) => {
+    setEditingTextId(null);
+    onTextCommit?.(annotationId, text);
+  };
 
   if (!assetUrl) {
     return (
@@ -50,29 +86,34 @@ export function PdfEditor({
   }
 
   return (
-    <div className="relative h-full w-full rounded-xl bg-muted/20">
-      <PdfPageCanvas
-        src={assetUrl}
-        page={page}
-        onPageChange={onPageChange}
-        onPageCountChange={onPageCountChange}
-        onBoundsChange={setBounds}
-      />
+    <div className="relative h-full w-full overflow-auto rounded-xl bg-muted/20">
+      <div className="relative inline-block" style={{ transform: `scale(${zoomLevel})`, transformOrigin: "top left" }}>
+        <PdfPageCanvas
+          src={assetUrl}
+          page={page}
+          onPageChange={onPageChange}
+          onPageCountChange={onPageCountChange}
+          onBoundsChange={setBounds}
+        />
 
-      <PdfAnnotationOverlay
-        mode={mode}
-        toolMode={toolMode}
-        bounds={bounds}
-        annotations={annotations}
-        selectedAnnotationId={selectedAnnotationId}
-        colors={colors}
-        preview={preview}
-        onSelectAnnotation={onSelectAnnotation}
-        onPointerDown={handlers.onPointerDown}
-        onPointerMove={handlers.onPointerMove}
-        onPointerUp={handlers.onPointerUp}
-        onPointerCancel={handlers.onPointerCancel}
-      />
+        <PdfAnnotationOverlay
+          mode={mode}
+          toolMode={toolMode}
+          bounds={bounds}
+          annotations={annotations}
+          selectedAnnotationId={selectedAnnotationId}
+          colors={colors}
+          preview={preview}
+          editingTextId={editingTextId}
+          onSelectAnnotation={onSelectAnnotation}
+          onTextEdit={handleTextEdit}
+          onTextCommit={handleTextCommit}
+          onPointerDown={handlers.onPointerDown}
+          onPointerMove={handlers.onPointerMove}
+          onPointerUp={handlers.onPointerUp}
+          onPointerCancel={handlers.onPointerCancel}
+        />
+      </div>
     </div>
   );
 }

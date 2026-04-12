@@ -15,6 +15,10 @@ interface EditorSurfaceProps {
   onPdfPageCountChange: (count: number) => void;
   onSelectAnnotation: (annotationId: string | null) => void;
   onCreateAnnotation: (payload: CreateAnnotationPayload) => void;
+  onTextEdit?: (annotationId: string, text: string) => void;
+  onTextCommit?: (annotationId: string, text: string) => void;
+  zoomLevel?: number;
+  onZoomChange?: (zoom: number) => void;
 }
 
 export function EditorSurface({
@@ -29,6 +33,10 @@ export function EditorSurface({
   onPdfPageCountChange,
   onSelectAnnotation,
   onCreateAnnotation,
+  onTextEdit,
+  onTextCommit,
+  zoomLevel,
+  onZoomChange,
 }: EditorSurfaceProps) {
   if (assetType === "pdf") {
     return (
@@ -43,6 +51,10 @@ export function EditorSurface({
         onPageCountChange={onPdfPageCountChange}
         onSelectAnnotation={onSelectAnnotation}
         onCreateAnnotation={onCreateAnnotation}
+        onTextEdit={onTextEdit}
+        onTextCommit={onTextCommit}
+        zoomLevel={zoomLevel}
+        onZoomChange={onZoomChange}
       />
     );
   }
@@ -57,6 +69,8 @@ export function EditorSurface({
       selectedAnnotationId={selectedAnnotationId}
       onSelectAnnotation={onSelectAnnotation}
       onCreateAnnotation={onCreateAnnotation}
+      onTextEdit={onTextEdit}
+      onTextCommit={onTextCommit}
     />
   );
 }

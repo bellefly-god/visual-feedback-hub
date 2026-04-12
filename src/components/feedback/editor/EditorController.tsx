@@ -12,7 +12,7 @@ import { CommentSidebar } from "@/components/feedback/editor/CommentSidebar";
 import { EditorSurface } from "@/features/editor/containers/EditorSurface";
 import { useToolModeState, toToolMode } from "@/features/editor/shared/state/useToolMode";
 import { useSelectedAnnotationState } from "@/features/editor/shared/state/useSelectedAnnotation";
-import type { AnnotationShapeMode, CreateAnnotationPayload } from "@/features/editor/shared/types/annotation";
+import type { AnnotationShapeMode, CreateAnnotationPayload, NormalizedAnnotation } from "@/features/editor/shared/types/annotation";
 import { DEFAULT_ANNOTATION_COLOR, sanitizeAnnotationColor } from "@/features/editor/shared/colors/annotationColor";
 import {
   createDraftAnnotationId,
@@ -111,6 +111,15 @@ export function EditorController() {
     [pendingAnnotation, visibleComments],
   );
 
+  // Text annotations are managed separately since they're edited inline
+  const [textAnnotations, setTextAnnotations] = useState<NormalizedAnnotation[]>([]);
+
+  // Combine comments-based annotations with text annotations
+  const allAnnotations = useMemo(
+    () => [...canvasAnnotations, ...textAnnotations],
+    [canvasAnnotations, textAnnotations],
+  );
+
   const reviewPath = useMemo(() => {
     return routePaths.review(shareToken ?? `share-${resolvedProjectId}`);
   }, [resolvedProjectId, shareToken]);
@@ -165,50 +174,40 @@ export function EditorController() {
       return;
     }
 
+    if (annotationHistory.past.length === 0) {
+      return;
+    }
+
     const currentSnapshot = captureHistorySnapshot();
-    let targetSnapshot: AnnotationHistorySnapshot | null = null;
+    const targetSnapshot = cloneHistorySnapshot(annotationHistory.past[annotationHistory.past.length - 1]);
 
-    setAnnotationHistory((history) => {
-      if (history.past.length === 0) {
-        return history;
-      }
-
-      targetSnapshot = cloneHistorySnapshot(history.past[history.past.length - 1]);
-      return {
-        past: history.past.slice(0, -1),
-        future: [cloneHistorySnapshot(currentSnapshot), ...history.future].slice(0, HISTORY_LIMIT),
-      };
+    setAnnotationHistory({
+      past: annotationHistory.past.slice(0, -1),
+      future: [cloneHistorySnapshot(currentSnapshot), ...annotationHistory.future].slice(0, HISTORY_LIMIT),
     });
 
-    if (targetSnapshot) {
-      applyHistorySnapshot(targetSnapshot);
-    }
-  }, [applyHistorySnapshot, captureHistorySnapshot, isImageEditor]);
+    applyHistorySnapshot(targetSnapshot);
+  }, [annotationHistory, applyHistorySnapshot, captureHistorySnapshot, isImageEditor]);
 
   const handleRedo = useCallback(() => {
     if (!isImageEditor) {
       return;
     }
 
+    if (annotationHistory.future.length === 0) {
+      return;
+    }
+
     const currentSnapshot = captureHistorySnapshot();
-    let targetSnapshot: AnnotationHistorySnapshot | null = null;
+    const targetSnapshot = cloneHistorySnapshot(annotationHistory.future[0]);
 
-    setAnnotationHistory((history) => {
-      if (history.future.length === 0) {
-        return history;
-      }
-
-      targetSnapshot = cloneHistorySnapshot(history.future[0]);
-      return {
-        past: [...history.past, cloneHistorySnapshot(currentSnapshot)].slice(-HISTORY_LIMIT),
-        future: history.future.slice(1),
-      };
+    setAnnotationHistory({
+      past: [...annotationHistory.past, cloneHistorySnapshot(currentSnapshot)].slice(-HISTORY_LIMIT),
+      future: annotationHistory.future.slice(1),
     });
 
-    if (targetSnapshot) {
-      applyHistorySnapshot(targetSnapshot);
-    }
-  }, [applyHistorySnapshot, captureHistorySnapshot, isImageEditor]);
+    applyHistorySnapshot(targetSnapshot);
+  }, [annotationHistory, applyHistorySnapshot, captureHistorySnapshot, isImageEditor]);
 
   const clampZoom = (value: number) => Math.max(0.5, Math.min(3, value));
 
@@ -244,6 +243,7 @@ export function EditorController() {
       setShareToken(existingShareLink?.token ?? null);
       setActiveCommentId((current) => resolveSelectedCommentId(current, nextComments));
       setAnnotationHistory({ past: [], future: [] });
+      setTextAnnotations([]);
     };
 
     void load();
@@ -371,8 +371,25 @@ export function EditorController() {
   };
 
   const handleCreateAnnotation = (payload: CreateAnnotationPayload) => {
+    // Cancel any pending annotation when starting a new one
     if (pendingAnnotation) {
-      setEditorMessage("Finish the current draft comment or cancel it before drawing a new one.");
+      setPendingAnnotation(null);
+      setDraftComment("");
+    }
+
+    if (payload.shapeType === "text") {
+      // Text annotations: create inline and manage separately
+      const newTextAnnotation: NormalizedAnnotation = {
+        id: createDraftAnnotationId(),
+        displayOrder: allAnnotations.length + 1,
+        status: "draft",
+        ...payload,
+        color: sanitizeAnnotationColor(payload.color),
+        page: assetType === "pdf" ? currentPdfPage : undefined,
+      };
+      setTextAnnotations((prev) => [...prev, newTextAnnotation]);
+      setActiveCommentId(newTextAnnotation.id);
+      setEditorMessage("Click the text to edit.");
       return;
     }
 
@@ -388,6 +405,21 @@ export function EditorController() {
       setActiveCommentId(null);
       setEditorMessage("Annotation placed. Add comment for this draft.");
     });
+  };
+
+  const handleTextEdit = (annotationId: string, text: string) => {
+    setTextAnnotations((prev) =>
+      prev.map((a) => (a.id === annotationId ? { ...a, textContent: text } : a)),
+    );
+  };
+
+  const handleTextCommit = (annotationId: string, text: string) => {
+    setTextAnnotations((prev) =>
+      prev.map((a) => (a.id === annotationId ? { ...a, textContent: text } : a)),
+    );
+    // Reset to pin mode after committing text
+    setToolMode("pin");
+    setEditorMessage("Text added. Press Enter to add a comment.");
   };
 
   const handleSubmitComment = async () => {
@@ -563,12 +595,12 @@ export function EditorController() {
               onWheel={handleCanvasWheel}
             >
               <div className="h-full w-full overflow-auto">
-                <div className="relative h-full w-full" style={assetType === "pdf" ? { zoom: zoomLevel } : undefined}>
+                <div className="relative h-full w-full">
                   <EditorSurface
                     assetType={assetType}
                     assetUrl={assetUrl}
                     toolMode={toolMode}
-                    annotations={canvasAnnotations}
+                    annotations={allAnnotations}
                     selectedAnnotationId={activeCommentId}
                     currentPdfPage={currentPdfPage}
                     onPdfPageChange={setCurrentPdfPage}
@@ -584,6 +616,10 @@ export function EditorController() {
                       setActiveCommentId(annotationId);
                     }}
                     onCreateAnnotation={handleCreateAnnotation}
+                    onTextEdit={handleTextEdit}
+                    onTextCommit={handleTextCommit}
+                    zoomLevel={zoomLevel}
+                    onZoomChange={setZoomLevel}
                   />
                 </div>
               </div>

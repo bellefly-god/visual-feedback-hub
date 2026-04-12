@@ -1,10 +1,12 @@
 import type { AnnotationShape } from "@/types/feedback";
 
-export type ToolMode = "select" | "pin" | "pen" | "arrow" | "rectangle" | "highlight";
+export type ToolMode = "select" | "pin" | "pen" | "arrow" | "rectangle" | "highlight" | "text";
 
 export type AnnotationShapeMode = Exclude<ToolMode, "select">;
 
 export type DragToolMode = Extract<ToolMode, "arrow" | "rectangle" | "highlight">;
+
+export type TextToolMode = "text";
 
 export interface NormalizedAnnotation {
   id: string;
@@ -15,6 +17,10 @@ export interface NormalizedAnnotation {
   width?: number;
   height?: number;
   pathPoints?: Array<{ x: number; y: number }>;
+  textContent?: string;
+  fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: number;
   color?: string;
   status?: "draft" | "saved";
   pinNumber?: number;
@@ -27,5 +33,9 @@ export interface CreateAnnotationPayload {
   width?: number;
   height?: number;
   pathPoints?: Array<{ x: number; y: number }>;
+  textContent?: string;
+  fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: number;
   color?: string;
 }
