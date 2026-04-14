@@ -123,17 +123,17 @@ const App = (): ReactNode => (
             <Route
               path="/login"
               element={
-                <AuthRedirect>
+                <AuthRoute>
                   <LazyRoute element={<Login />} fallback={<PageLoader name="login" />} />
-                </AuthRedirect>
+                </AuthRoute>
               }
             />
             <Route
               path="/signup"
               element={
-                <AuthRedirect>
+                <AuthRoute>
                   <LazyRoute element={<SignUp />} fallback={<PageLoader name="signup" />} />
-                </AuthRedirect>
+                </AuthRoute>
               }
             />
 
