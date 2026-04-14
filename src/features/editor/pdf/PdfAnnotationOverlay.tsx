@@ -18,14 +18,7 @@ type PenPreview = {
   points: Array<{ x: number; y: number }>;
 };
 
-type TextPreview = {
-  toolMode: "text";
-  color: string;
-  x: number;
-  y: number;
-};
-
-type InteractionPreview = DragPreview | PenPreview | TextPreview;
+type InteractionPreview = DragPreview | PenPreview;
 
 interface PdfAnnotationOverlayProps {
   mode: "editor" | "review";
@@ -35,10 +28,7 @@ interface PdfAnnotationOverlayProps {
   selectedAnnotationId: string | null;
   colors: AnnotationColorState;
   preview: InteractionPreview | null;
-  editingTextId?: string | null;
   onSelectAnnotation: (annotationId: string | null) => void;
-  onTextEdit?: (annotationId: string, text: string) => void;
-  onTextCommit?: (annotationId: string, text: string) => void;
   onPointerDown: PointerEventHandler<HTMLDivElement>;
   onPointerMove: PointerEventHandler<HTMLDivElement>;
   onPointerUp: PointerEventHandler<HTMLDivElement>;
@@ -69,21 +59,6 @@ function renderPreview(preview: InteractionPreview, colors: AnnotationColorState
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    );
-  }
-
-  if (preview.toolMode === "text") {
-    return (
-      <text
-        x={preview.x}
-        y={preview.y}
-        fontSize={16}
-        fontFamily="system-ui, -apple-system, sans-serif"
-        fill={stroke}
-        fillOpacity={0.7}
-      >
-        Text
-      </text>
     );
   }
 
@@ -141,90 +116,6 @@ function renderOrderBadge(order: number, anchor: { x: number; y: number }) {
   );
 }
 
-function renderTextAnnotation(
-  annotation: NormalizedAnnotation,
-  bounds: OverlayBounds,
-  isSelected: boolean,
-  isEditing: boolean,
-  editingText: string,
-  onTextChange: (text: string) => void,
-  onTextCommit: () => void,
-) {
-  const rect = getPdfRectGeometry(annotation, bounds);
-  const color = sanitizeAnnotationColor(annotation.color);
-  const fontSize = annotation.fontSize ?? 16;
-  const fontFamily = annotation.fontFamily ?? "system-ui, -apple-system, sans-serif";
-  const fontWeight = annotation.fontWeight ?? 400;
-
-  if (isEditing) {
-    return (
-      <foreignObject
-        x={rect.x}
-        y={rect.y}
-        width={Math.max(rect.width, 100)}
-        height={Math.max(rect.height, 30)}
-      >
-        <input
-          autoFocus
-          value={editingText}
-          onChange={(e) => onTextChange(e.target.value)}
-          onBlur={onTextCommit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === "Escape") {
-              onTextCommit();
-            }
-          }}
-          style={{
-            width: "100%",
-            height: "100%",
-            border: `2px dashed ${adjustColor(color, -20)}`,
-            borderRadius: 4,
-            padding: "2px 4px",
-            fontSize,
-            fontFamily,
-            fontWeight,
-            color,
-            background: toRgba(color, 0.1),
-            outline: "none",
-          }}
-        />
-      </foreignObject>
-    );
-  }
-
-  return (
-    <g
-      className="cursor-pointer"
-      onPointerDown={(event) => event.stopPropagation()}
-    >
-      <text
-        x={rect.x}
-        y={rect.y + fontSize}
-        fontSize={fontSize}
-        fontFamily={fontFamily}
-        fontWeight={fontWeight}
-        fill={color}
-      >
-        {annotation.textContent || "Click to edit"}
-      </text>
-      {isSelected && (
-        <rect
-          x={rect.x - 4}
-          y={rect.y - 4}
-          width={rect.width + 8}
-          height={rect.height + 8}
-          fill="none"
-          stroke={adjustColor(color, -20)}
-          strokeWidth={1.5}
-          strokeDasharray="4 2"
-          rx={4}
-          ry={4}
-        />
-      )}
-    </g>
-  );
-}
-
 export function PdfAnnotationOverlay({
   mode,
   toolMode,
@@ -233,39 +124,13 @@ export function PdfAnnotationOverlay({
   selectedAnnotationId,
   colors,
   preview,
-  editingTextId,
   onSelectAnnotation,
-  onTextEdit,
-  onTextCommit,
   onPointerDown,
   onPointerMove,
   onPointerUp,
   onPointerCancel,
 }: PdfAnnotationOverlayProps) {
-  const [editingText, setEditingText] = useState("");
   const cursorClass = mode === "editor" && toolMode !== "select" ? "cursor-crosshair" : "cursor-default";
-
-  useEffect(() => {
-    if (editingTextId) {
-      const annotation = annotations.find((a) => a.id === editingTextId);
-      if (annotation && annotation.textContent !== undefined) {
-        setEditingText(annotation.textContent);
-      }
-    }
-  }, [editingTextId, annotations]);
-
-  const handleTextChange = (text: string) => {
-    setEditingText(text);
-    if (editingTextId) {
-      onTextEdit?.(editingTextId, text);
-    }
-  };
-
-  const handleTextCommit = () => {
-    if (editingTextId) {
-      onTextCommit?.(editingTextId, editingText);
-    }
-  };
 
   return (
     <div
@@ -295,29 +160,8 @@ export function PdfAnnotationOverlay({
 
         {bounds && annotations.map((annotation) => {
           const isSelected = annotation.id === selectedAnnotationId;
-          const isEditing = annotation.id === editingTextId;
           const baseColor = sanitizeAnnotationColor(annotation.color ?? colors.stroke);
           const activeColor = adjustColor(baseColor, -20);
-
-          if (annotation.shapeType === "text") {
-            const rect = getPdfRectGeometry(annotation, bounds);
-            const displayOrder = annotation.displayOrder ?? annotation.pinNumber ?? 0;
-
-            return (
-              <g key={annotation.id}>
-                {renderTextAnnotation(
-                  annotation,
-                  bounds,
-                  isSelected,
-                  isEditing,
-                  editingText,
-                  handleTextChange,
-                  handleTextCommit,
-                )}
-                {displayOrder > 0 && renderOrderBadge(displayOrder, { x: rect.x, y: rect.y })}
-              </g>
-            );
-          }
 
           if (annotation.shapeType === "pin") {
             const pin = getPdfPinGeometry(annotation, bounds);

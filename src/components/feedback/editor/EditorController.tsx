@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type WheelEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Save, Share2, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, Save, Share2, ZoomIn, ZoomOut } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { AnnotationToolbar } from "@/components/feedback/AnnotationToolbar";
 import { ShareLinkCard } from "@/components/feedback/ShareLinkCard";
@@ -22,13 +22,13 @@ import {
   resolveSelectedCommentId,
   withPendingAnnotation,
 } from "@/features/editor/shared/links/commentAnnotationLink";
+import { toast } from "sonner";
 
 interface AnnotationHistorySnapshot {
   comments: CommentView[];
   pendingAnnotation: PendingAnnotation | null;
   activeCommentId: string | null;
   draftComment: string;
-  textAnnotations: NormalizedAnnotation[];
 }
 
 interface AnnotationHistoryState {
@@ -51,7 +51,6 @@ function cloneHistorySnapshot(snapshot: AnnotationHistorySnapshot): AnnotationHi
     pendingAnnotation: snapshot.pendingAnnotation ? { ...snapshot.pendingAnnotation } : null,
     activeCommentId: snapshot.activeCommentId,
     draftComment: snapshot.draftComment,
-    textAnnotations: snapshot.textAnnotations.map((a) => ({ ...a })),
   };
 }
 
@@ -69,12 +68,12 @@ export function EditorController() {
   const { toolMode, setToolMode } = useToolModeState("pin");
   const [draftComment, setDraftComment] = useState("");
   const [pendingAnnotation, setPendingAnnotation] = useState<PendingAnnotation | null>(null);
+  
   const [activeAnnotationColor, setActiveAnnotationColor] = useState(DEFAULT_ANNOTATION_COLOR);
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState(1);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
-  const [editorMessage, setEditorMessage] = useState<string | null>(null);
   const [annotationHistory, setAnnotationHistory] = useState<AnnotationHistoryState>({
     past: [],
     future: [],
@@ -113,13 +112,10 @@ export function EditorController() {
     [pendingAnnotation, visibleComments],
   );
 
-  // Text annotations are managed separately since they're edited inline
-  const [textAnnotations, setTextAnnotations] = useState<NormalizedAnnotation[]>([]);
-
-  // Combine comments-based annotations with text annotations
+  // Combine comments-based annotations
   const allAnnotations = useMemo(
-    () => [...canvasAnnotations, ...textAnnotations],
-    [canvasAnnotations, textAnnotations],
+    () => canvasAnnotations,
+    [canvasAnnotations],
   );
 
   const reviewPath = useMemo(() => {
@@ -137,9 +133,8 @@ export function EditorController() {
       pendingAnnotation: pendingAnnotation ? { ...pendingAnnotation } : null,
       activeCommentId,
       draftComment,
-      textAnnotations: textAnnotations.map((a) => ({ ...a })),
     };
-  }, [activeCommentId, comments, draftComment, pendingAnnotation, textAnnotations]);
+  }, [activeCommentId, comments, draftComment, pendingAnnotation]);
 
   const applyHistorySnapshot = useCallback(
     (snapshot: AnnotationHistorySnapshot) => {
@@ -147,8 +142,7 @@ export function EditorController() {
       setPendingAnnotation(snapshot.pendingAnnotation ? { ...snapshot.pendingAnnotation } : null);
       setActiveCommentId(snapshot.activeCommentId);
       setDraftComment(snapshot.draftComment);
-      setTextAnnotations(snapshot.textAnnotations.map((a) => ({ ...a })));
-      setEditorMessage(null);
+      
     },
     [setActiveCommentId],
   );
@@ -219,6 +213,15 @@ export function EditorController() {
     setZoomLevel((current) => clampZoom(Number((current + delta).toFixed(2))));
   };
 
+  const stepPage = (delta: number) => {
+    setCurrentPdfPage((current) => {
+      const next = current + delta;
+      if (next < 1) return 1;
+      if (next > pdfPageCount) return pdfPageCount;
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (projectId && projectId !== resolvedProjectId) {
       navigate(routePaths.editor(resolvedProjectId), { replace: true });
@@ -247,7 +250,6 @@ export function EditorController() {
       setShareToken(existingShareLink?.token ?? null);
       setActiveCommentId((current) => resolveSelectedCommentId(current, nextComments));
       setAnnotationHistory({ past: [], future: [] });
-      setTextAnnotations([]);
     };
 
     void load();
@@ -349,15 +351,14 @@ export function EditorController() {
     try {
       const created = await feedbackGateway.getOrCreateShareLink(resolvedProjectId);
       setShareToken(created.token);
-      setEditorMessage(null);
       setShowShare(true);
+      toast.success("分享链接已生成！");
     } catch (error) {
       if (error instanceof Error && error.message === "COMMENTS_REQUIRED_BEFORE_SHARING") {
-        setEditorMessage("Add at least one comment before generating a share link.");
+        toast.warning("请先添加至少一条评论");
         return;
       }
-
-      setEditorMessage("Unable to generate share link right now.");
+      toast.error("无法生成分享链接");
     }
   };
 
@@ -381,28 +382,9 @@ export function EditorController() {
       setDraftComment("");
     }
 
-    if (payload.shapeType === "text") {
-      // Text annotations: create inline and manage separately
-      recordImageAction(() => {
-        const newTextAnnotation: NormalizedAnnotation = {
-          id: createDraftAnnotationId(),
-          displayOrder: allAnnotations.length + 1,
-          status: "draft",
-          ...payload,
-          color: sanitizeAnnotationColor(payload.color),
-          page: assetType === "pdf" ? currentPdfPage : undefined,
-        };
-        setTextAnnotations((prev) => [...prev, newTextAnnotation]);
-        setActiveCommentId(newTextAnnotation.id);
-        setEditorMessage("Click the text to edit, or click Submit to skip adding a comment.");
-      });
-      return;
-    }
-
     // Simplified flow: create annotation directly as pending comment
     // Comments are optional - user can add comment or discard
     recordImageAction(() => {
-      debugLog("annotation creation requested", payload);
       setPendingAnnotation({
         id: createDraftAnnotationId(),
         status: "draft",
@@ -411,24 +393,8 @@ export function EditorController() {
         page: assetType === "pdf" ? currentPdfPage : undefined,
       });
       setActiveCommentId(null);
-      setEditorMessage("Annotation created. Add a comment (optional) or press Skip to discard.");
+      toast.info("标注已创建，输入评论后提交或点击取消丢弃");
     });
-  };
-
-  const handleTextEdit = (annotationId: string, text: string) => {
-    setTextAnnotations((prev) =>
-      prev.map((a) => (a.id === annotationId ? { ...a, textContent: text } : a)),
-    );
-  };
-
-  const handleTextCommit = (annotationId: string, text: string) => {
-    recordImageAction(() => {
-      setTextAnnotations((prev) =>
-        prev.map((a) => (a.id === annotationId ? { ...a, textContent: text } : a)),
-      );
-    });
-    // Keep text tool mode active for adding more text annotations
-    setEditorMessage("Text added. Click to edit or continue adding text.");
   };
 
   const handleSubmitComment = async () => {
@@ -440,7 +406,7 @@ export function EditorController() {
 
     // Show saving state
     setSaveState("saving");
-    setEditorMessage("Submitting...");
+    toast.loading("提交中...");
 
     try {
       const shapeType: AnnotationShapeMode = pendingAnnotation.shapeType;
@@ -466,12 +432,12 @@ export function EditorController() {
       applyNextComments(nextComments);
       setDraftComment("");
       setPendingAnnotation(null);
-      setEditorMessage("Comment submitted successfully.");
+      toast.success("评论提交成功！");
       setActiveCommentId(nextComments[nextComments.length - 1]?.id ?? null);
       setSaveState("saved");
     } catch (error) {
       console.error("Failed to submit comment:", error);
-      setEditorMessage("Failed to submit comment. Please try again.");
+      toast.error("提交评论失败，请重试");
       setSaveState("idle");
     }
   };
@@ -482,19 +448,49 @@ export function EditorController() {
     }
 
     try {
-      const nextComments = await feedbackGateway.updateCommentStatus(activeComment.id, "fixed");
+      // 根据当前状态决定下一个状态
+      // - reopen → pending (开始修复)
+      // - pending → fixed (标记已修复)
+      const nextStatus = activeComment.status === "reopen" ? "pending" : "fixed";
+      
+      const nextComments = await feedbackGateway.updateCommentStatus(activeComment.id, nextStatus);
       if (isImageEditor) {
         pushHistorySnapshot(captureHistorySnapshot());
       }
       applyNextComments(nextComments);
-      setEditorMessage("Comment marked as fixed.");
+      toast.success(nextStatus === "pending" ? "开始处理重新打开的评论" : "评论已标记为修复");
     } catch (error) {
       if (error instanceof Error && error.message === "INVALID_STATUS_TRANSITION") {
-        setEditorMessage("This comment cannot be moved to fixed from current status.");
+        toast.warning("当前状态不能进行此操作");
         return;
       }
+      toast.error("无法更新状态，请稍后重试");
+    }
+  };
 
-      setEditorMessage("Unable to update status right now.");
+  const handleEditComment = async (commentId: string, content: string) => {
+    try {
+      const nextComments = await feedbackGateway.editComment(commentId, content);
+      applyNextComments(nextComments);
+      toast.success("评论已更新");
+    } catch {
+      toast.error("无法更新评论，请稍后重试");
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      const nextComments = await feedbackGateway.deleteComment(commentId);
+      if (isImageEditor) {
+        pushHistorySnapshot(captureHistorySnapshot());
+      }
+      applyNextComments(nextComments);
+      if (activeCommentId === commentId) {
+        setActiveCommentId(null);
+      }
+      toast.success("评论已删除");
+    } catch (error) {
+      toast.error("无法删除评论，请稍后重试");
     }
   };
 
@@ -523,12 +519,12 @@ export function EditorController() {
             onToolChange={(tool) => {
               const nextMode = toToolMode(tool);
               setToolMode(nextMode);
-              setEditorMessage(
+              toast.info(
                 nextMode === "pin"
-                  ? "Click to place pin or draw first, then add comment."
+                  ? "点击画布放置标注，然后添加评论"
                   : nextMode === "select"
-                    ? "Select an existing annotation."
-                    : "Drag on the canvas to draw annotation.",
+                    ? "选择一个已有的标注"
+                    : "在画布上拖动来绘制标注",
               );
             }}
             onColorChange={(color) => setActiveAnnotationColor(sanitizeAnnotationColor(color))}
@@ -537,27 +533,55 @@ export function EditorController() {
           />
 
           {assetType === "pdf" && (
-            <div className="inline-flex items-center rounded-lg border border-border/60">
-              <button
-                type="button"
-                className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                onClick={() => stepZoom(-0.1)}
-                title="Zoom out (Ctrl/Cmd + -)"
-              >
-                <ZoomOut className="h-3.5 w-3.5" />
-              </button>
-              <span className="min-w-[52px] px-2 text-center text-[11px] text-muted-foreground">
-                {Math.round(zoomLevel * 100)}%
-              </span>
-              <button
-                type="button"
-                className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                onClick={() => stepZoom(0.1)}
-                title="Zoom in (Ctrl/Cmd + +)"
-              >
-                <ZoomIn className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            <>
+              {/* Page navigation controls */}
+              <div className="inline-flex items-center rounded-lg border border-border/60">
+                <button
+                  type="button"
+                  className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => stepPage(-1)}
+                  disabled={currentPdfPage <= 1}
+                  title="Previous page"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <span className="min-w-[70px] px-2 text-center text-[11px] text-muted-foreground">
+                  Page {currentPdfPage} of {pdfPageCount}
+                </span>
+                <button
+                  type="button"
+                  className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => stepPage(1)}
+                  disabled={currentPdfPage >= pdfPageCount}
+                  title="Next page"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Zoom controls */}
+              <div className="inline-flex items-center rounded-lg border border-border/60">
+                <button
+                  type="button"
+                  className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  onClick={() => stepZoom(-0.1)}
+                  title="Zoom out (Ctrl/Cmd + -)"
+                >
+                  <ZoomOut className="h-3.5 w-3.5" />
+                </button>
+                <span className="min-w-[52px] px-2 text-center text-[11px] text-muted-foreground">
+                  {Math.round(zoomLevel * 100)}%
+                </span>
+                <button
+                  type="button"
+                  className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  onClick={() => stepZoom(0.1)}
+                  title="Zoom in (Ctrl/Cmd + +)"
+                >
+                  <ZoomIn className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </>
           )}
 
           <span className="h-4 w-px bg-border" />
@@ -583,7 +607,7 @@ export function EditorController() {
       <div className="flex flex-1 overflow-hidden">
         <CommentSidebar
           comments={visibleComments}
-          activeCommentId={activeCommentId}
+          selectedCommentId={activeCommentId}
           activeComment={activeComment}
           isCommentMode={isCommentMode}
           hasPendingAnnotation={Boolean(pendingAnnotation)}
@@ -596,17 +620,19 @@ export function EditorController() {
           }}
           onRequestPinMode={() => {
             setToolMode("pin");
-            setEditorMessage("Click image to place a pin, then add comment.");
+            toast.info("点击画布放置标注，然后添加评论");
           }}
           onSubmitComment={() => void handleSubmitComment()}
           onCancelDraft={() => {
             recordImageAction(() => {
               setDraftComment("");
               setPendingAnnotation(null);
-              setEditorMessage("Draft annotation removed.");
+              toast.info("草稿已丢弃");
             });
           }}
           onMarkFixed={() => void handleMarkFixed()}
+          onEditComment={handleEditComment}
+          onDeleteComment={handleDeleteComment}
         />
 
         <div className="relative flex-1 overflow-auto p-10">
@@ -637,8 +663,6 @@ export function EditorController() {
                       setActiveCommentId(annotationId);
                     }}
                     onCreateAnnotation={handleCreateAnnotation}
-                    onTextEdit={handleTextEdit}
-                    onTextCommit={handleTextCommit}
                     zoomLevel={zoomLevel}
                     onZoomChange={setZoomLevel}
                   />
@@ -647,13 +671,6 @@ export function EditorController() {
             </div>
           </div>
 
-          {assetType === "pdf" && (
-            <p className="mt-2 text-center text-[12px] text-muted-foreground">
-              Viewing page {currentPdfPage} of {pdfPageCount}.
-            </p>
-          )}
-
-          {editorMessage && <p className="mt-3 text-center text-[12px] text-muted-foreground">{editorMessage}</p>}
         </div>
       </div>
 

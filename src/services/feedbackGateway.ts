@@ -7,6 +7,9 @@
  */
 
 import type { CommentStatus, AnnotationShape } from "@/types/feedback";
+import { feedbackService } from "@/services/feedbackService";
+import { supabaseFeedbackService } from "@/services/supabaseFeedbackService";
+import { isSupabaseConfigured } from "@/services/supabaseClient";
 
 // ============================================
 // Types
@@ -58,134 +61,102 @@ export interface CommentView {
 }
 
 // ============================================
-// LocalStorage Backend
+// Gateway Implementation
 // ============================================
-
-const STORAGE_KEY = "feedbackmark.comments.v2";
-
-interface LocalComment {
-  id: string;
-  projectId: string;
-  displayOrder: number;
-  author: string;
-  avatar: string;
-  message: string;
-  status: CommentStatus;
-  shapeType: AnnotationShape;
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  color?: string;
-  pathPoints?: Array<{ x: number; y: number }>;
-  page?: number;
-  createdAt: string;
-  updatedAt: string;
-  replies: Array<{
-    id: string;
-    author: string;
-    avatar: string;
-    message: string;
-    createdAt: string;
-  }>;
-}
-
-function getStore(): Record<string, LocalComment[]> {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
-}
-
-function setStore(data: Record<string, LocalComment[]>): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).slice(0, 2);
-  return parts.map((p) => p.charAt(0).toUpperCase()).join("");
-}
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
-
-function toView(comment: LocalComment): CommentView {
-  return {
-    id: comment.id,
-    displayOrder: comment.displayOrder,
-    author: comment.author,
-    avatar: comment.avatar,
-    message: comment.message,
-    status: comment.status,
-    shapeType: comment.shapeType,
-    x: comment.x,
-    y: comment.y,
-    width: comment.width,
-    height: comment.height,
-    color: comment.color,
-    pathPoints: comment.pathPoints,
-    page: comment.page,
-    pinNumber: comment.displayOrder,
-    replies: comment.replies.map((r) => ({
-      author: r.author,
-      avatar: r.avatar,
-      message: r.message,
-      createdAt: r.createdAt,
-    })),
-    createdAt: comment.createdAt,
-  };
-}
 
 // ============================================
 // Gateway Implementation
 // ============================================
 
 export const feedbackGateway = {
+  // 上传资源文件
+  uploadAsset: async (file: File): Promise<string> => {
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.uploadAsset(file);
+    }
+    return feedbackService.uploadAsset(file);
+  },
+
+  // 创建项目
+  createProject: async (input: { title: string; assetType: "image" | "pdf" | "screenshot"; assetUrl: string }): Promise<{ id: string }> => {
+    if (isSupabaseConfigured) {
+      const project = await supabaseFeedbackService.createProject({
+        title: input.title,
+        assetType: input.assetType,
+        assetUrl: input.assetUrl,
+      });
+      return { id: project.id };
+    }
+    const project = await feedbackService.createProject({
+      title: input.title,
+      assetType: input.assetType,
+      assetUrl: input.assetUrl,
+    });
+    return { id: project.id };
+  },
+
+  // 确保项目存在
+  ensureProject: async (input: { projectId: string; title?: string }): Promise<{ id: string; title: string; assetType: "image" | "pdf" | "screenshot"; assetUrl: string }> => {
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.ensureProject(input);
+    }
+    return feedbackService.ensureProject(input);
+  },
+
+  // 列出项目
+  listProjects: async (): Promise<any[]> => {
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.listProjects();
+    }
+    return feedbackService.listProjects();
+  },
+
+  // 保存项目反馈时间戳
+  saveProjectFeedback: async (projectId: string): Promise<void> => {
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.saveProjectFeedback(projectId);
+    }
+    return feedbackService.saveProjectFeedback(projectId);
+  },
+
+  // 获取分享链接
+  getShareLinkByProjectId: async (projectId: string): Promise<any | null> => {
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.getShareLinkByProjectId(projectId);
+    }
+    return feedbackService.getShareLinkByProjectId(projectId);
+  },
+
+  // 获取或创建分享链接
+  getOrCreateShareLink: async (projectId: string): Promise<any> => {
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.getOrCreateShareLink(projectId);
+    }
+    return feedbackService.getOrCreateShareLink(projectId);
+  },
+
+  // 通过 Token 获取审核数据
+  getReviewDataByToken: async (token: string): Promise<any | null> => {
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.getReviewDataByToken(token);
+    }
+    return feedbackService.getReviewDataByToken(token);
+  },
+
   // 列出评论
   listComments: async (projectId: string): Promise<CommentView[]> => {
-    const store = getStore();
-    const comments = store[projectId] ?? [];
-    return comments
-      .sort((a, b) => a.displayOrder - b.displayOrder)
-      .map(toView);
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.listComments(projectId);
+    }
+    return feedbackService.listComments(projectId);
   },
 
   // 创建评论
   createComment: async (input: CreateCommentInput): Promise<CommentView[]> => {
-    const store = getStore();
-    const projectComments = store[input.projectId] ?? [];
-    const now = new Date().toISOString();
-    const nextOrder = projectComments.length + 1;
-
-    const newComment: LocalComment = {
-      id: generateId(),
-      projectId: input.projectId,
-      displayOrder: nextOrder,
-      author: input.authorName,
-      avatar: getInitials(input.authorName),
-      message: input.content,
-      status: "pending",
-      shapeType: input.shapeType,
-      x: input.x,
-      y: input.y,
-      width: input.width,
-      height: input.height,
-      color: input.color,
-      pathPoints: input.pathPoints,
-      page: input.page,
-      createdAt: now,
-      updatedAt: now,
-      replies: [],
-    };
-
-    store[input.projectId] = [...projectComments, newComment];
-    setStore(store);
-
-    return store[input.projectId].map(toView);
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.createComment(input);
+    }
+    return feedbackService.createComment(input);
   },
 
   // 更新状态
@@ -193,71 +164,42 @@ export const feedbackGateway = {
     commentId: string,
     status: CommentStatus
   ): Promise<CommentView[]> => {
-    const store = getStore();
-    const now = new Date().toISOString();
-
-    for (const projectId of Object.keys(store)) {
-      const comment = store[projectId].find((c) => c.id === commentId);
-      if (comment) {
-        comment.status = status;
-        comment.updatedAt = now;
-        setStore(store);
-        return store[projectId].map(toView);
-      }
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.updateCommentStatus(commentId, status);
     }
-
-    throw new Error("评论不存在");
+    return feedbackService.updateCommentStatus(commentId, status);
   },
 
   // 添加回复
   addReply: async (input: AddReplyInput): Promise<CommentView[]> => {
-    const store = getStore();
-    const now = new Date().toISOString();
-
-    for (const projectId of Object.keys(store)) {
-      const comment = store[projectId].find((c) => c.id === input.commentId);
-      if (comment) {
-        comment.replies.push({
-          id: generateId(),
-          author: input.authorName,
-          avatar: getInitials(input.authorName),
-          message: input.content,
-          createdAt: now,
-        });
-        comment.updatedAt = now;
-        setStore(store);
-        return store[projectId].map(toView);
-      }
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.addReply(input);
     }
-
-    throw new Error("评论不存在");
+    return feedbackService.addReply(input);
   },
 
   // 删除评论
   deleteComment: async (commentId: string): Promise<CommentView[] | undefined> => {
-    const store = getStore();
-
-    for (const projectId of Object.keys(store)) {
-      const idx = store[projectId].findIndex((c) => c.id === commentId);
-      if (idx !== -1) {
-        store[projectId] = store[projectId].filter((c) => c.id !== commentId);
-        // 重新排序
-        store[projectId].forEach((c, i) => {
-          c.displayOrder = i + 1;
-        });
-        setStore(store);
-        return store[projectId].map(toView);
-      }
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.deleteComment(commentId);
     }
+    return feedbackService.deleteComment(commentId);
+  },
 
-    return undefined;
+  // 编辑评论
+  editComment: async (commentId: string, content: string): Promise<CommentView[]> => {
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.editComment(commentId, content);
+    }
+    return feedbackService.editComment(commentId, content);
   },
 
   // 清除项目数据（用于测试）
   clearProject: async (projectId: string): Promise<void> => {
-    const store = getStore();
-    delete store[projectId];
-    setStore(store);
+    if (isSupabaseConfigured) {
+      return supabaseFeedbackService.clearProject(projectId);
+    }
+    return feedbackService.clearProject(projectId);
   },
 };
 

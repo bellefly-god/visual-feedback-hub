@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from "pdfjs-dist";
+import { useEffect, useRef, useState, useMemo } from "react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy, type PDFPageProxy } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { getFittedPdfViewport } from "@/features/editor/pdf/usePdfViewport";
+import { getFittedPdfViewport, type ZoomMode } from "@/features/editor/pdf/usePdfViewport";
 import type { OverlayBounds } from "@/features/editor/shared/coords/normalizedCoords";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -13,12 +13,19 @@ interface PdfPageCanvasProps {
   onPageChange?: (nextPage: number) => void;
   onPageCountChange?: (count: number) => void;
   onBoundsChange: (bounds: OverlayBounds | null) => void;
+  zoomMode?: ZoomMode;
+  customScale?: number;
+  onZoomPercentageChange?: (percentage: number) => void;
 }
 
 interface StageSize {
   width: number;
   height: number;
 }
+
+// 页面缓存 - 避免重复渲染
+const pageCache = new Map<string, PDFPageProxy>();
+const MAX_CACHE_SIZE = 5;
 
 const EPSILON = 0.5;
 
@@ -41,6 +48,9 @@ export function PdfPageCanvas({
   onPageChange,
   onPageCountChange,
   onBoundsChange,
+  zoomMode = "fit-page",
+  customScale = 1,
+  onZoomPercentageChange,
 }: PdfPageCanvasProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -51,7 +61,9 @@ export function PdfPageCanvas({
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [pageCount, setPageCount] = useState(1);
   const [stageSize, setStageSize] = useState<StageSize>({ width: 0, height: 0 });
+  const [loadingProgress, setLoadingProgress] = useState<number | null>(null);
 
+  // 容器尺寸测量
   useEffect(() => {
     const root = rootRef.current;
     if (!root) {
@@ -96,6 +108,7 @@ export function PdfPageCanvas({
     };
   }, []);
 
+  // PDF 文档加载
   useEffect(() => {
     let cancelled = false;
     const loadingTask = getDocument(src);
@@ -103,6 +116,16 @@ export function PdfPageCanvas({
     const loadPdf = async () => {
       try {
         setStatus("loading");
+        setLoadingProgress(0);
+
+        // 监听加载进度
+        loadingTask.onProgress = (progress) => {
+          if (!cancelled && progress.total > 0) {
+            const percent = Math.round((progress.loaded / progress.total) * 100);
+            setLoadingProgress(percent);
+          }
+        };
+
         const pdf = await loadingTask.promise;
 
         if (cancelled) {
@@ -112,9 +135,12 @@ export function PdfPageCanvas({
         pdfRef.current = pdf;
         setPageCount(pdf.numPages);
         onPageCountChange?.(pdf.numPages);
+        setLoadingProgress(null);
+        setStatus("ready");
       } catch {
         if (!cancelled) {
           setStatus("error");
+          setLoadingProgress(null);
         }
       }
     };
@@ -127,9 +153,11 @@ export function PdfPageCanvas({
       void loadingTask.destroy();
       pdfRef.current = null;
       lastBoundsRef.current = null;
+      setLoadingProgress(null);
     };
   }, [onBoundsChange, onPageCountChange, src]);
 
+  // 页面渲染（带缓存）
   useEffect(() => {
     let cancelled = false;
 
@@ -144,13 +172,35 @@ export function PdfPageCanvas({
 
       try {
         setStatus("loading");
-        const pdfPage = await pdf.getPage(targetPage);
+
+        // 使用缓存的页面（如果存在）
+        const cacheKey = `${src}-${targetPage}`;
+        let pdfPage: PDFPageProxy;
+
+        if (pageCache.has(cacheKey)) {
+          pdfPage = pageCache.get(cacheKey)!;
+        } else {
+          pdfPage = await pdf.getPage(targetPage);
+
+          // 添加到缓存
+          if (pageCache.size >= MAX_CACHE_SIZE) {
+            // 删除最早的缓存项
+            const firstKey = pageCache.keys().next().value;
+            if (firstKey) {
+              pageCache.delete(firstKey);
+            }
+          }
+          pageCache.set(cacheKey, pdfPage);
+        }
+
         const baseViewport = pdfPage.getViewport({ scale: 1 });
         const fitted = getFittedPdfViewport({
           containerWidth: stageSize.width,
           containerHeight: stageSize.height,
           pageWidth: baseViewport.width,
           pageHeight: baseViewport.height,
+          zoomMode,
+          customScale,
         });
 
         if (!fitted || cancelled) {
@@ -190,6 +240,12 @@ export function PdfPageCanvas({
           onBoundsChange(fitted);
         }
 
+        // 计算并报告缩放百分比
+        if (onZoomPercentageChange) {
+          const zoomPercentage = Math.round(renderScale * 100);
+          onZoomPercentageChange(zoomPercentage);
+        }
+
         setStatus("ready");
       } catch {
         if (!cancelled) {
@@ -203,7 +259,7 @@ export function PdfPageCanvas({
     return () => {
       cancelled = true;
     };
-  }, [onBoundsChange, page, pageCount, stageSize.height, stageSize.width, src]);
+  }, [onBoundsChange, page, pageCount, stageSize.height, stageSize.width, src, zoomMode, customScale, onZoomPercentageChange]);
 
   const currentPage = Math.max(1, Math.min(page, pageCount));
 
@@ -218,8 +274,13 @@ export function PdfPageCanvas({
   return (
     <div ref={rootRef} className="relative h-full w-full overflow-hidden rounded-xl bg-muted/20">
       {status === "loading" && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <p className="text-[12px] text-muted-foreground">Loading PDF preview...</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-muted/50">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          {loadingProgress !== null ? (
+            <p className="text-[12px] text-muted-foreground">Loading PDF... {loadingProgress}%</p>
+          ) : (
+            <p className="text-[12px] text-muted-foreground">Loading PDF preview...</p>
+          )}
         </div>
       )}
       {status === "error" && (

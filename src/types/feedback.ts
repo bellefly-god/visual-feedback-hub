@@ -2,7 +2,7 @@ export type AssetType = "image" | "pdf" | "screenshot";
 
 export type CommentStatus = "pending" | "fixed" | "approved" | "reopen";
 
-export type AnnotationShape = "pin" | "pen" | "arrow" | "rectangle" | "highlight" | "text";
+export type AnnotationShape = "pin" | "pen" | "arrow" | "rectangle" | "highlight";
 
 export interface ProjectRecord {
   id: string;

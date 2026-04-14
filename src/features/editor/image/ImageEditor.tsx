@@ -18,8 +18,6 @@ interface ImageEditorProps {
   selectedAnnotationId: string | null;
   onSelectAnnotation: (annotationId: string | null) => void;
   onCreateAnnotation?: (payload: CreateAnnotationPayload) => void;
-  onTextEdit?: (annotationId: string, text: string) => void;
-  onTextCommit?: (annotationId: string, text: string) => void;
 }
 
 interface TransformState {
@@ -70,12 +68,9 @@ export function ImageEditor({
   selectedAnnotationId,
   onSelectAnnotation,
   onCreateAnnotation,
-  onTextEdit,
-  onTextCommit,
 }: ImageEditorProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [bounds, setBounds] = useState<OverlayBounds | null>(null);
-  const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [transform, setTransform] = useState<TransformState>({
     zoom: 1,
     panX: 0,
@@ -91,30 +86,9 @@ export function ImageEditor({
     activeColor: safeColor,
     interactionScale: transform.zoom,
     annotations,
-    onSelectAnnotation: (id) => {
-      onSelectAnnotation(id);
-      if (id) {
-        const ann = annotations.find((a) => a.id === id);
-        if (ann?.shapeType === "text") {
-          setEditingTextId(id);
-        } else {
-          setEditingTextId(null);
-        }
-      } else {
-        setEditingTextId(null);
-      }
-    },
+    onSelectAnnotation,
     onCreateAnnotation,
   });
-
-  const handleTextEdit = (annotationId: string, text: string) => {
-    onTextEdit?.(annotationId, text);
-  };
-
-  const handleTextCommit = (annotationId: string, text: string) => {
-    setEditingTextId(null);
-    onTextCommit?.(annotationId, text);
-  };
 
   useEffect(() => {
     setTransform({
@@ -206,10 +180,7 @@ export function ImageEditor({
           selectedAnnotationId={selectedAnnotationId}
           colors={colors}
           preview={preview}
-          editingTextId={editingTextId}
           onSelectAnnotation={onSelectAnnotation}
-          onTextEdit={handleTextEdit}
-          onTextCommit={handleTextCommit}
           onPointerDown={handlers.onPointerDown}
           onPointerMove={handlers.onPointerMove}
           onPointerUp={handlers.onPointerUp}

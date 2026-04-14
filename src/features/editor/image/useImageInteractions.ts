@@ -197,29 +197,6 @@ export function useImageInteractions({
         return;
       }
 
-if (toolMode === "text") {
-        // Prevent creating multiple text annotations at the same position
-        // Only create if there's no existing draft text annotation being edited
-        const existingDraftText = annotations.find(
-          (a) => a.shapeType === "text" && a.status === "draft"
-        );
-        if (existingDraftText) {
-          onSelectAnnotation(existingDraftText.id);
-          return;
-        }
-        const normalizedPoint = toNormalizedPoint(bounds, clampedPoint);
-        onCreateAnnotation?.({
-          shapeType: "text",
-          x: normalizedPoint.x,
-          y: normalizedPoint.y,
-          width: 100,
-          height: 30,
-          textContent: "",
-          color: activeColor,
-        });
-        return;
-      }
-
       if (toolMode === "pen") {
         const session: PenPreview = {
           toolMode: "pen",

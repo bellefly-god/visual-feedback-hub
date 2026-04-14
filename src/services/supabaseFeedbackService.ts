@@ -296,11 +296,13 @@ export const supabaseFeedbackService = {
 
     return (projectRows as ProjectRow[]).map((row) => {
       const statuses = statusMap.get(row.id) ?? [];
+      // Use asset_url as thumbnail for images
+      const thumbnail = row.asset_type === "image" ? row.asset_url : "";
       return {
         id: row.id,
         name: row.title,
         fileType: row.asset_type,
-        thumbnail: "",
+        thumbnail,
         date: toProjectDateLabel(row.created_at),
         commentCount: statuses.length,
         status: deriveProjectStatus(statuses),
@@ -673,5 +675,85 @@ export const supabaseFeedbackService = {
       assetUrl: projectRow.asset_url,
       comments,
     };
+  },
+
+  async deleteComment(commentId: string): Promise<CommentView[]> {
+    const db = assertSupabase();
+    
+    // 先获取评论信息以确定 projectId
+    const { data: comment, error: fetchError } = await db
+      .from("comments")
+      .select("id, project_id")
+      .eq("id", commentId)
+      .maybeSingle();
+    
+    if (fetchError) {
+      throw fetchError;
+    }
+    
+    if (!comment) {
+      return [];
+    }
+    
+    const projectId = (comment as { id: string; project_id: string }).project_id;
+    
+    // 删除评论
+    const { error: deleteError } = await db
+      .from("comments")
+      .delete()
+      .eq("id", commentId);
+    
+    if (deleteError) {
+      throw deleteError;
+    }
+    
+    return this.listComments(projectId);
+  },
+
+  async editComment(commentId: string, content: string): Promise<CommentView[]> {
+    const db = assertSupabase();
+    
+    // 先获取评论信息以确定 projectId
+    const { data: comment, error: fetchError } = await db
+      .from("comments")
+      .select("id, project_id")
+      .eq("id", commentId)
+      .maybeSingle();
+    
+    if (fetchError) {
+      throw fetchError;
+    }
+    
+    if (!comment) {
+      return [];
+    }
+
+    const projectId = comment.project_id;
+    
+    // 更新评论内容
+    const { error: updateError } = await db
+      .from("comments")
+      .update({ content })
+      .eq("id", commentId);
+    
+    if (updateError) {
+      throw updateError;
+    }
+    
+    return this.listComments(projectId);
+  },
+
+  async clearProject(projectId: string): Promise<void> {
+    const db = assertSupabase();
+    
+    // 删除项目的所有评论
+    const { error: deleteError } = await db
+      .from("comments")
+      .delete()
+      .eq("project_id", projectId);
+    
+    if (deleteError) {
+      throw deleteError;
+    }
   },
 };

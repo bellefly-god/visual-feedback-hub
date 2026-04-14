@@ -36,10 +36,7 @@ interface ImageAnnotationOverlayProps {
   selectedAnnotationId: string | null;
   colors: AnnotationColorState;
   preview: InteractionPreview | null;
-  editingTextId?: string | null;
   onSelectAnnotation: (annotationId: string | null) => void;
-  onTextEdit?: (annotationId: string, text: string) => void;
-  onTextCommit?: (annotationId: string, text: string) => void;
   onPointerDown: PointerEventHandler<HTMLDivElement>;
   onPointerMove: PointerEventHandler<HTMLDivElement>;
   onPointerUp: PointerEventHandler<HTMLDivElement>;
@@ -139,10 +136,7 @@ export function ImageAnnotationOverlay({
   selectedAnnotationId,
   colors,
   preview,
-  editingTextId,
   onSelectAnnotation,
-  onTextEdit,
-  onTextCommit,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -150,30 +144,6 @@ export function ImageAnnotationOverlay({
 }: ImageAnnotationOverlayProps) {
   const cursorClass = mode === "editor" && toolMode !== "select" ? "cursor-crosshair" : "cursor-default";
   const selectionOutlineColor = "rgba(15, 23, 42, 0.45)";
-
-  const [editingText, setEditingText] = useState("");
-
-  useEffect(() => {
-    if (editingTextId) {
-      const annotation = annotations.find((a) => a.id === editingTextId);
-      if (annotation && annotation.textContent !== undefined) {
-        setEditingText(annotation.textContent);
-      }
-    }
-  }, [editingTextId, annotations]);
-
-  const handleTextChange = (text: string) => {
-    setEditingText(text);
-    if (editingTextId) {
-      onTextEdit?.(editingTextId, text);
-    }
-  };
-
-  const handleTextCommit = () => {
-    if (editingTextId) {
-      onTextCommit?.(editingTextId, editingText);
-    }
-  };
 
   return (
     <div
@@ -343,86 +313,6 @@ export function ImageAnnotationOverlay({
                     onPointerDown={selectAnnotation}
                   />
                   {displayOrder > 0 && renderOrderBadge(displayOrder, anchor)}
-                </g>
-              );
-            }
-
-            case "text": {
-              const rect = getRectGeometry(annotation, bounds);
-              const fontSize = annotation.fontSize ?? 16;
-              const fontFamily = annotation.fontFamily ?? "system-ui, -apple-system, sans-serif";
-              const fontWeight = annotation.fontWeight ?? 400;
-              const isEditing = annotation.id === editingTextId;
-
-              if (isEditing) {
-                return (
-                  <g key={annotation.id}>
-                    <foreignObject
-                      x={rect.x}
-                      y={rect.y}
-                      width={Math.max(rect.width, 100)}
-                      height={Math.max(rect.height, 30)}
-                    >
-                      <input
-                        autoFocus
-                        value={editingText}
-                        onChange={(e) => handleTextChange(e.target.value)}
-                        onBlur={handleTextCommit}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === "Escape") {
-                            handleTextCommit();
-                          }
-                        }}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          border: `2px dashed ${adjustColor(baseColor, -20)}`,
-                          borderRadius: 4,
-                          padding: "2px 4px",
-                          fontSize,
-                          fontFamily,
-                          fontWeight,
-                          color: baseColor,
-                          background: toRgba(baseColor, 0.1),
-                          outline: "none",
-                        }}
-                      />
-                    </foreignObject>
-                  </g>
-                );
-              }
-
-              return (
-                <g key={annotation.id} onPointerDown={(event) => {
-                  event.stopPropagation();
-                  onSelectAnnotation(annotation.id);
-                }} className="cursor-text">
-                  <text
-                    x={rect.x}
-                    y={rect.y + fontSize}
-                    fontSize={fontSize}
-                    fontFamily={fontFamily}
-                    fontWeight={fontWeight}
-                    fill={baseColor}
-                  >
-                    {annotation.textContent || "Click to edit"}
-                  </text>
-                  {isSelected && (
-                    <rect
-                      x={rect.x - 4}
-                      y={rect.y - 4}
-                      width={Math.max(rect.width + 8, 100)}
-                      height={Math.max(rect.height + 8, 30)}
-                      fill="none"
-                      stroke={selectionOutlineColor}
-                      strokeWidth={1.5}
-                      strokeDasharray="4 2"
-                      rx={4}
-                      ry={4}
-                      pointerEvents="none"
-                    />
-                  )}
-                  {displayOrder > 0 && renderOrderBadge(displayOrder, { x: rect.x, y: rect.y })}
                 </g>
               );
             }

@@ -126,7 +126,7 @@ export default function ReviewPage() {
     });
   }, [assetType, currentPdfPage, debugLog, pdfPageCount]);
 
-  const handleUpdateStatus = async (nextStatus: "approved" | "pending") => {
+  const handleUpdateStatus = async (nextStatus: "approved" | "pending" | "reopen") => {
     if (!active) {
       return;
     }
@@ -248,7 +248,7 @@ export default function ReviewPage() {
                   size="sm"
                   className="flex-1 h-8 text-[13px]"
                   onClick={() => void handleUpdateStatus("approved")}
-                  disabled={active.status === "approved"}
+                  disabled={active.status === "approved" || active.status === "reopen"}
                 >
                   <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
                   Approve
@@ -257,11 +257,20 @@ export default function ReviewPage() {
                   variant="outline"
                   size="sm"
                   className="flex-1 h-8 text-[13px]"
+                  onClick={() => void handleUpdateStatus("reopen")}
+                  disabled={active.status !== "approved"}
+                >
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  Reopen
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 h-8 text-[13px]"
                   onClick={() => void handleUpdateStatus("pending")}
                   disabled={active.status === "pending"}
                 >
-                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                  Revise
+                  Back to Pending
                 </Button>
               </div>
             )}

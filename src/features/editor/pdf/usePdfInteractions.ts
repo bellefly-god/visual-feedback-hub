@@ -22,14 +22,7 @@ type PenPreview = {
   points: Array<{ x: number; y: number }>;
 };
 
-type TextPreview = {
-  toolMode: "text";
-  color: string;
-  x: number;
-  y: number;
-};
-
-type InteractionSession = DragPreview | PenPreview | TextPreview;
+type InteractionSession = DragPreview | PenPreview;
 
 interface UsePdfInteractionsParams {
   mode: "editor" | "review";
@@ -154,27 +147,6 @@ export function usePdfInteractions({
     [bounds, onCreateAnnotation],
   );
 
-  const commitTextAnnotation = useCallback(
-    (session: TextPreview) => {
-      if (!bounds || !onCreateAnnotation) {
-        return;
-      }
-
-      const normalizedPoint = toNormalizedPoint(bounds, session);
-
-      onCreateAnnotation({
-        shapeType: "text",
-        x: normalizedPoint.x,
-        y: normalizedPoint.y,
-        width: 100,
-        height: 30,
-        textContent: "",
-        color: session.color,
-      });
-    },
-    [bounds, onCreateAnnotation],
-  );
-
   const handlers = useMemo(() => {
     const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) {
@@ -227,18 +199,6 @@ export function usePdfInteractions({
         sessionRef.current = session;
         setPreview(session);
         event.currentTarget.setPointerCapture(event.pointerId);
-        return;
-      }
-
-      if (toolMode === "text") {
-        const session: TextPreview = {
-          toolMode: "text",
-          color: activeColor,
-          x: clampedPoint.x,
-          y: clampedPoint.y,
-        };
-
-        commitTextAnnotation(session);
         return;
       }
 
@@ -329,7 +289,7 @@ export function usePdfInteractions({
       onPointerUp,
       onPointerCancel,
     };
-  }, [activeColor, bounds, commitDragAnnotation, commitPenAnnotation, commitTextAnnotation, mode, onCreateAnnotation, onSelectAnnotation, toolMode]);
+  }, [activeColor, bounds, commitDragAnnotation, commitPenAnnotation, mode, onCreateAnnotation, onSelectAnnotation, toolMode]);
 
   return {
     preview,

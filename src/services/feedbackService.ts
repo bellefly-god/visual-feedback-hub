@@ -189,11 +189,14 @@ function toProjectListItem(store: FeedbackStore, project: ProjectRecord): Projec
   const comments = getCommentsByProject(store, project.id);
   const commentStatuses: CommentStatus[] = comments.map((comment) => comment.status);
 
+  // Use assetUrl as thumbnail for images
+  const thumbnail = project.assetType === "image" ? project.assetUrl : "";
+
   return {
     id: project.id,
     name: project.title,
     fileType: project.assetType,
-    thumbnail: "",
+    thumbnail,
     date: toProjectDateLabel(project.createdAt),
     commentCount: comments.length,
     status: deriveProjectStatus(commentStatuses),
@@ -453,5 +456,47 @@ export const feedbackService = {
       assetUrl: project.assetUrl,
       comments: toCommentViews(store, project.id),
     };
+  },
+
+  async deleteComment(commentId: string): Promise<CommentView[]> {
+    const store = readStore();
+    const found = findCommentWithProject(store, commentId);
+
+    if (!found) {
+      return [];
+    }
+
+    store.comments = store.comments.filter((c) => c.id !== commentId);
+    // 重新排序
+    const projectComments = store.comments.filter((c) => c.projectId === found.projectId);
+    projectComments.forEach((c, i) => {
+      c.displayOrder = i + 1;
+    });
+
+    writeStore(store);
+    return toCommentViews(store, found.projectId);
+  },
+
+  async editComment(commentId: string, content: string): Promise<CommentView[]> {
+    const store = readStore();
+    const found = findCommentWithProject(store, commentId);
+
+    if (!found) {
+      return [];
+    }
+
+    const comment = store.comments.find((c) => c.id === commentId);
+    if (comment) {
+      comment.content = content;
+      writeStore(store);
+    }
+
+    return toCommentViews(store, found.projectId);
+  },
+
+  async clearProject(projectId: string): Promise<void> {
+    const store = readStore();
+    store.comments = store.comments.filter((c) => c.projectId !== projectId);
+    writeStore(store);
   },
 };

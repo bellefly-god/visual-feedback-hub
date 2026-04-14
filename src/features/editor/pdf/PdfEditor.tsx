@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import { PdfPageCanvas } from "@/features/editor/pdf/PdfPageCanvas";
 import { PdfAnnotationOverlay } from "@/features/editor/pdf/PdfAnnotationOverlay";
 import { usePdfInteractions } from "@/features/editor/pdf/usePdfInteractions";
 import { useAnnotationColors } from "@/features/editor/shared/state/useAnnotationColors";
 import type { OverlayBounds } from "@/features/editor/shared/coords/normalizedCoords";
 import type { CreateAnnotationPayload, NormalizedAnnotation, ToolMode } from "@/features/editor/shared/types/annotation";
+import type { ZoomMode } from "@/features/editor/pdf/usePdfViewport";
 
 interface PdfEditorProps {
   mode: "editor" | "review";
@@ -17,11 +19,14 @@ interface PdfEditorProps {
   onPageCountChange?: (count: number) => void;
   onSelectAnnotation: (annotationId: string | null) => void;
   onCreateAnnotation?: (payload: CreateAnnotationPayload) => void;
-  onTextEdit?: (annotationId: string, text: string) => void;
-  onTextCommit?: (annotationId: string, text: string) => void;
   zoomLevel?: number;
   onZoomChange?: (zoom: number) => void;
 }
+
+const ZOOM_MODES: { mode: ZoomMode; label: string; icon: React.ReactNode }[] = [
+  { mode: "fit-page", label: "Fit Page", icon: <Maximize2 className="h-3.5 w-3.5" /> },
+  { mode: "fit-width", label: "Fit Width", icon: <Maximize2 className="h-3.5 w-3.5 rotate-90" /> },
+];
 
 export function PdfEditor({
   mode,
@@ -34,48 +39,86 @@ export function PdfEditor({
   onPageCountChange,
   onSelectAnnotation,
   onCreateAnnotation,
-  onTextEdit,
-  onTextCommit,
-  zoomLevel = 1,
-  onZoomChange,
 }: PdfEditorProps) {
   const [bounds, setBounds] = useState<OverlayBounds | null>(null);
-  const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const [zoomMode, setZoomMode] = useState<ZoomMode>("fit-page");
+  const [customScale, setCustomScale] = useState(1);
+  const [zoomPercentage, setZoomPercentage] = useState(100);
+
   const colors = useAnnotationColors();
   const { handlers, preview } = usePdfInteractions({
     mode,
     toolMode,
     bounds,
     activeColor: colors.stroke,
-    onSelectAnnotation: (id) => {
-      onSelectAnnotation(id);
-      if (id) {
-        const ann = annotations.find((a) => a.id === id);
-        if (ann?.shapeType === "text") {
-          setEditingTextId(id);
-        } else {
-          setEditingTextId(null);
-        }
-      } else {
-        setEditingTextId(null);
-      }
-    },
-    onCreateAnnotation: (payload) => {
-      onCreateAnnotation?.(payload);
-      if (payload.shapeType === "text") {
-        // Will be handled via annotation update
-      }
-    },
+    onSelectAnnotation,
+    onCreateAnnotation,
   });
 
-  const handleTextEdit = (annotationId: string, text: string) => {
-    onTextEdit?.(annotationId, text);
+  const handleZoomModeChange = (newMode: ZoomMode) => {
+    setZoomMode(newMode);
+    setCustomScale(1); // Reset custom scale when changing mode
   };
 
-  const handleTextCommit = (annotationId: string, text: string) => {
-    setEditingTextId(null);
-    onTextCommit?.(annotationId, text);
+  const handleZoomIn = () => {
+    setCustomScale((prev) => Math.min(prev + 0.25, 3));
   };
+
+  const handleZoomOut = () => {
+    setCustomScale((prev) => Math.max(prev - 0.25, 0.25));
+  };
+
+  // 键盘快捷键
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 只有在编辑器获得焦点时才响应
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      // Ctrl/Cmd + 加号 = 放大
+      if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        handleZoomIn();
+        return;
+      }
+
+      // Ctrl/Cmd + 减号 = 缩小
+      if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        handleZoomOut();
+        return;
+      }
+
+      // Ctrl/Cmd + 0 = 重置缩放
+      if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        setZoomMode("fit-page");
+        setCustomScale(1);
+        return;
+      }
+
+      // Ctrl/Cmd + 1 = Fit Page
+      if ((e.ctrlKey || e.metaKey) && e.key === '1') {
+        e.preventDefault();
+        setZoomMode("fit-page");
+        setCustomScale(1);
+        return;
+      }
+
+      // Ctrl/Cmd + 2 = Fit Width
+      if ((e.ctrlKey || e.metaKey) && e.key === '2') {
+        e.preventDefault();
+        setZoomMode("fit-width");
+        setCustomScale(1);
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!assetUrl) {
     return (
@@ -94,6 +137,9 @@ export function PdfEditor({
           onPageChange={onPageChange}
           onPageCountChange={onPageCountChange}
           onBoundsChange={setBounds}
+          zoomMode={zoomMode}
+          customScale={customScale}
+          onZoomPercentageChange={setZoomPercentage}
         />
 
         <PdfAnnotationOverlay
@@ -104,15 +150,61 @@ export function PdfEditor({
           selectedAnnotationId={selectedAnnotationId}
           colors={colors}
           preview={preview}
-          editingTextId={editingTextId}
           onSelectAnnotation={onSelectAnnotation}
-          onTextEdit={handleTextEdit}
-          onTextCommit={handleTextCommit}
           onPointerDown={handlers.onPointerDown}
           onPointerMove={handlers.onPointerMove}
           onPointerUp={handlers.onPointerUp}
           onPointerCancel={handlers.onPointerCancel}
         />
+      </div>
+
+      {/* 缩放控制工具栏 */}
+      <div className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-md border border-border/70 bg-card/95 px-2 py-1 text-[11px] shadow-sm backdrop-blur">
+        {/* 缩放模式选择 */}
+        <div className="flex items-center gap-1">
+          {ZOOM_MODES.map((zm) => (
+            <button
+              key={zm.mode}
+              type="button"
+              className={`rounded p-1 transition-colors ${
+                zoomMode === zm.mode
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              onClick={() => handleZoomModeChange(zm.mode)}
+              title={zm.label}
+            >
+              {zm.icon}
+            </button>
+          ))}
+        </div>
+
+        {/* 分隔线 */}
+        <div className="h-4 w-px bg-border/50" />
+
+        {/* 缩放按钮 */}
+        <button
+          type="button"
+          className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={handleZoomOut}
+          title="Zoom Out"
+        >
+          <ZoomOut className="h-3.5 w-3.5" />
+        </button>
+
+        {/* 缩放百分比显示 */}
+        <span className="min-w-[40px] text-center text-foreground font-medium">
+          {zoomPercentage}%
+        </span>
+
+        <button
+          type="button"
+          className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={handleZoomIn}
+          title="Zoom In"
+        >
+          <ZoomIn className="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
   );
