@@ -215,7 +215,11 @@ export default function ReviewPage() {
         shapeType,
       });
       
-      applyNextComments(nextComments);
+      // 更新评论列表（如果有返回）
+      if (nextComments && nextComments.length > 0) {
+        applyNextComments(nextComments);
+      }
+      
       setDraftComment("");
       setPendingAnnotation(null);
       toast.success("评论已提交！");
@@ -257,7 +261,11 @@ export default function ReviewPage() {
         shapeType: "text",
       });
       
-      applyNextComments(nextComments);
+      // 更新评论列表（如果有返回）
+      if (nextComments && nextComments.length > 0) {
+        applyNextComments(nextComments);
+      }
+      
       setDraftComment("");
       setPendingAnnotation(null);
       toast.success("文字已添加！");

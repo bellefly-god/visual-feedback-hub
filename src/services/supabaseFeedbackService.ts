@@ -13,6 +13,42 @@ import type {
   ShareLinkRecord,
 } from "@/types/feedback";
 
+// ============================================
+// 超时工具函数
+// ============================================
+
+/**
+ * 为 Promise 添加超时保护
+ * @param promise 要包装的 Promise
+ * @param ms 超时时间（毫秒）
+ * @param fallback 超时后的回退值
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback?: T): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (fallback !== undefined) {
+        console.warn(`Operation timed out after ${ms}ms, using fallback`);
+        resolve(fallback);
+      } else {
+        reject(new Error(`TIMEOUT_AFTER_${ms}MS`));
+      }
+    }, ms);
+
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
+// 默认超时时间
+const DEFAULT_TIMEOUT = 10000; // 10秒
+
 type ProjectRow = {
   id: string;
   title: string;
@@ -595,8 +631,14 @@ export const supabaseFeedbackService = {
     }
 
     await db.from("comments").update({ updated_at: now }).eq("id", input.commentId);
-    await this.saveProjectFeedback((comment as { project_id: string }).project_id);
-    return this.listComments((comment as { project_id: string }).project_id);
+    this.saveProjectFeedback((comment as { project_id: string }).project_id).catch(() => {});
+
+    // 添加超时保护
+    return withTimeout(
+      this.listComments((comment as { project_id: string }).project_id),
+      DEFAULT_TIMEOUT,
+      []
+    );
   },
 
   async updateCommentStatus(commentId: string, nextStatus: CommentStatus): Promise<CommentView[]> {
@@ -631,8 +673,10 @@ export const supabaseFeedbackService = {
     }
 
     const projectId = (data as { project_id: string }).project_id;
-    await this.saveProjectFeedback(projectId);
-    return this.listComments(projectId);
+    this.saveProjectFeedback(projectId).catch(() => {});
+
+    // 添加超时保护
+    return withTimeout(this.listComments(projectId), DEFAULT_TIMEOUT, []);
   },
 
   async saveProjectFeedback(projectId: string): Promise<void> {
@@ -773,7 +817,8 @@ export const supabaseFeedbackService = {
       throw deleteError;
     }
     
-    return this.listComments(projectId);
+    // 添加超时保护
+    return withTimeout(this.listComments(projectId), DEFAULT_TIMEOUT, []);
   },
 
   async editComment(commentId: string, content: string): Promise<CommentView[]> {
@@ -806,7 +851,8 @@ export const supabaseFeedbackService = {
       throw updateError;
     }
     
-    return this.listComments(projectId);
+    // 添加超时保护
+    return withTimeout(this.listComments(projectId), DEFAULT_TIMEOUT, []);
   },
 
   async clearProject(projectId: string): Promise<void> {
