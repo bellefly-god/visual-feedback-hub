@@ -542,8 +542,21 @@ export const supabaseFeedbackService = {
       throw error;
     }
 
-    await this.saveProjectFeedback(input.projectId);
-    return this.listComments(input.projectId);
+    // 更新项目时间戳（忽略错误）
+    this.saveProjectFeedback(input.projectId).catch(() => {});
+
+    // 获取最新评论列表，添加超时保护
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("LIST_COMMENTS_TIMEOUT")), 8000);
+      });
+      const comments = await Promise.race([this.listComments(input.projectId), timeoutPromise]);
+      return comments;
+    } catch (listError) {
+      console.warn("Failed to fetch updated comments, returning empty list:", listError);
+      // 评论已创建成功，但获取列表失败，返回空数组让 UI 更新
+      return [];
+    }
   },
 
   async addReply(input: CreateReplyInput): Promise<CommentView[]> {

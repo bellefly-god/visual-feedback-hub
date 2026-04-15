@@ -490,11 +490,19 @@ export function EditorController() {
         pushHistorySnapshot(captureHistorySnapshot());
       }
 
-      applyNextComments(nextComments);
+      // 更新评论列表（如果有返回）
+      if (nextComments && nextComments.length > 0) {
+        applyNextComments(nextComments);
+        setActiveCommentId(nextComments[nextComments.length - 1]?.id ?? null);
+      } else {
+        // 评论已创建，但获取列表失败，刷新页面获取最新数据
+        window.location.reload();
+        return;
+      }
+
       setDraftComment("");
       setPendingAnnotation(null);
       toast.success("评论提交成功！");
-      setActiveCommentId(nextComments[nextComments.length - 1]?.id ?? null);
       setSaveState("saved");
     } catch (error) {
       // 更详细的错误日志
