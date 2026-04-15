@@ -1,6 +1,6 @@
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { canTransitionStatus, deriveProjectStatus } from "@/lib/status";
-import { supabase } from "@/services/supabaseClient";
+import { supabase, type SupabaseClient } from "@/services/supabaseClient";
 import { getCurrentUser } from "@/services/supabaseAuthService";
 import { isUuid } from "@/lib/routePaths";
 import type {
@@ -139,11 +139,10 @@ function getCurrentUserIdSync(): string {
   return "owner-demo";
 }
 
-function assertSupabase() {
+function assertSupabase(): SupabaseClient {
   if (!supabase) {
     throw new Error("SUPABASE_NOT_CONFIGURED");
   }
-
   return supabase;
 }
 
