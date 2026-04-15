@@ -33,6 +33,7 @@ export default function ReviewPage() {
   const [pdfPageCount, setPdfPageCount] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [actualProjectId, setActualProjectId] = useState<string | null>(null); // 实际的 projectId（非 share token）
   
   // 标注工具状态
   const [toolMode, setToolMode] = useState<ToolMode>("pin");
@@ -98,6 +99,7 @@ export default function ReviewPage() {
         setAssetType(reviewData.assetType);
         setAssetUrl(reviewData.assetUrl);
         setComments(reviewData.comments);
+        setActualProjectId(reviewData.projectId); // 保存实际的 projectId
         setIsLoading(false);
         
         // 如果有评论，选中第一个
@@ -190,6 +192,7 @@ export default function ReviewPage() {
     }
     
     setSaveState("saving");
+    const loadingToastId = toast.loading("提交中...");
     
     try {
       const name = reviewerName || "Guest";
@@ -201,8 +204,14 @@ export default function ReviewPage() {
         ? pendingAnnotation.textContent
         : content;
       
+      // 使用实际的 projectId 而非 reviewToken
+      if (!actualProjectId) {
+        toast.error("项目未加载，请刷新页面", { id: loadingToastId });
+        return;
+      }
+      
       const nextComments = await feedbackGateway.createComment({
-        projectId: reviewToken,
+        projectId: actualProjectId,
         content: commentContent,
         x: pendingAnnotation.x,
         y: pendingAnnotation.y,
@@ -213,6 +222,7 @@ export default function ReviewPage() {
         page: assetType === "pdf" ? currentPdfPage : undefined,
         authorName: name,
         shapeType,
+        textContent: shapeType === "text" ? commentContent : undefined,
       });
       
       // 更新评论列表（如果有返回）
@@ -222,11 +232,11 @@ export default function ReviewPage() {
       
       setDraftComment("");
       setPendingAnnotation(null);
-      toast.success("评论已提交！");
+      toast.success("评论已提交！", { id: loadingToastId });
       setSaveState("saved");
     } catch (error) {
       console.error("Failed to submit comment:", error);
-      toast.error("提交失败，请重试");
+      toast.error("提交失败，请重试", { id: loadingToastId });
       setSaveState("idle");
     }
   };
@@ -242,13 +252,20 @@ export default function ReviewPage() {
     }
     
     setSaveState("saving");
+    const loadingToastId = toast.loading("提交中...");
     setDraftComment(text); // 保存文字内容
     
     try {
       const name = reviewerName || "Guest";
       
+      // 使用实际的 projectId 而非 reviewToken
+      if (!actualProjectId) {
+        toast.error("项目未加载，请刷新页面", { id: loadingToastId });
+        return;
+      }
+      
       const nextComments = await feedbackGateway.createComment({
-        projectId: reviewToken,
+        projectId: actualProjectId,
         content: text,
         x: pendingAnnotation.x,
         y: pendingAnnotation.y,
@@ -259,6 +276,7 @@ export default function ReviewPage() {
         page: assetType === "pdf" ? currentPdfPage : undefined,
         authorName: name,
         shapeType: "text",
+        textContent: text, // 单独存储文字内容以便渲染
       });
       
       // 更新评论列表（如果有返回）
@@ -268,11 +286,11 @@ export default function ReviewPage() {
       
       setDraftComment("");
       setPendingAnnotation(null);
-      toast.success("文字已添加！");
+      toast.success("文字已添加！", { id: loadingToastId });
       setSaveState("saved");
     } catch (error) {
       console.error("Failed to add text:", error);
-      toast.error("添加失败，请重试");
+      toast.error("添加失败，请重试", { id: loadingToastId });
       setSaveState("idle");
     }
   };

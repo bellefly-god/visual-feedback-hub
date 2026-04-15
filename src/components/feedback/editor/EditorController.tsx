@@ -420,7 +420,7 @@ export function EditorController() {
     const loadingToastId = toast.loading("提交中...");
 
     try {
-      // 文本标注：text 作为 content 提交
+      // 文本标注：text 同时作为 content 和 textContent
       const nextComments = await feedbackGateway.createComment({
         projectId: resolvedProjectId,
         content: text, // 文字内容作为评论内容
@@ -433,6 +433,7 @@ export function EditorController() {
         page: pendingAnnotation.page,
         authorName: "You",
         shapeType: "text",
+        textContent: text, // 单独存储文字内容以便渲染
       });
 
       if (isImageEditor) {
