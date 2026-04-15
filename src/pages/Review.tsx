@@ -75,8 +75,12 @@ export default function ReviewPage() {
     [annotations, pendingAnnotation],
   );
   
+  // isCommentMode: 只有非文本类型的 pendingAnnotation 才锁定工具
+  // 文本类型允许切换工具来取消输入
+  const isCommentMode = pendingAnnotation && pendingAnnotation.shapeType !== "text";
+  
+  // 活跃的评论（选中的评论）
   const active = visibleComments.find((c) => c.id === activeComment);
-  const isCommentMode = Boolean(pendingAnnotation);
   
   // 加载项目数据
   useEffect(() => {

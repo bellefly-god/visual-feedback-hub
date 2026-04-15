@@ -2,6 +2,7 @@ import { useState, useEffect, type PointerEvent, type PointerEventHandler } from
 import type { AnnotationColorState } from "@/features/editor/shared/types/editor-state";
 import type { NormalizedAnnotation, ToolMode } from "@/features/editor/shared/types/annotation";
 import type { OverlayBounds } from "@/features/editor/shared/coords/normalizedCoords";
+import { toAbsolutePoint } from "@/features/editor/shared/coords/normalizedCoords";
 import {
   getAnnotationAnchor,
   getArrowGeometry,
@@ -327,9 +328,10 @@ export function ImageAnnotationOverlay({
             }
 
             case "text": {
-              // 文字标注：直接在图片上显示文字
-              const textX = annotation.x;
-              const textY = annotation.y;
+              // 文字标注：使用 toAbsolutePoint 转换百分比坐标为像素坐标
+              const textPoint = bounds ? toAbsolutePoint(bounds, annotation.x, annotation.y) : { x: annotation.x, y: annotation.y };
+              const textX = textPoint.x;
+              const textY = textPoint.y;
               const fontSize = annotation.fontSize ?? 14;
               const textContent = annotation.textContent || "";
               const displayOrder = annotation.displayOrder ?? annotation.pinNumber ?? 0;
@@ -420,28 +422,43 @@ export function ImageAnnotationOverlay({
         {preview && renderPreview(preview, colors)}
 
         {/* 文本输入框 */}
-        {pendingTextAnnotation && bounds && (
+        {pendingTextAnnotation && bounds ? (
           <foreignObject
             x={bounds.x + (bounds.width * pendingTextAnnotation.x) / 100}
             y={bounds.y + (bounds.height * pendingTextAnnotation.y) / 100 - 70}
             width="200"
             height="70"
-            style={{ overflow: "visible" }}
+            requiredExtensions="http://www.w3.org/1999/xhtml"
           >
             <div
-              className="rounded-lg border-2 shadow-lg p-2 flex flex-col gap-1"
-              style={{
-                backgroundColor: pendingTextAnnotation.color + "f0",
-                borderColor: pendingTextAnnotation.color,
-              }}
               xmlns="http://www.w3.org/1999/xhtml"
+              style={{
+                backgroundColor: pendingTextAnnotation.color,
+                borderColor: pendingTextAnnotation.color,
+                borderRadius: '8px',
+                borderWidth: '2px',
+                borderStyle: 'solid',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                padding: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
             >
-              {/* 使用原生 HTML 方式避免 React 状态管理复杂化 */}
               <textarea
                 id="text-annotation-input"
-                className="resize-none border-0 bg-transparent outline-none text-white placeholder:text-white/60 w-full"
+                style={{
+                  resize: 'none',
+                  border: 'none',
+                  background: 'transparent',
+                  outline: 'none',
+                  color: 'white',
+                  width: '100%',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  minHeight: '21px',
+                }}
                 placeholder="输入文字..."
-                style={{ fontSize: 14, fontWeight: 500, minHeight: 21 }}
                 rows={1}
                 autoFocus
                 onKeyDown={(e) => {
@@ -457,15 +474,33 @@ export function ImageAnnotationOverlay({
                   }
                 }}
               />
-              <div className="flex items-center justify-end gap-1">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
                 <button
-                  className="h-6 px-2 text-[11px] text-white/80 hover:text-white hover:bg-white/20 rounded"
+                  style={{
+                    height: '24px',
+                    padding: '0 8px',
+                    fontSize: '11px',
+                    color: 'rgba(255, 255, 255, 0.8)',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
                   onClick={() => onTextCancel?.()}
                 >
                   取消
                 </button>
                 <button
-                  className="h-6 px-2 text-[11px] bg-white/90 text-gray-800 hover:bg-white rounded"
+                  style={{
+                    height: '24px',
+                    padding: '0 8px',
+                    fontSize: '11px',
+                    color: '#1f2937',
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
                   onClick={() => {
                     const textarea = document.getElementById("text-annotation-input") as HTMLTextAreaElement;
                     const value = textarea?.value || "";
@@ -479,7 +514,7 @@ export function ImageAnnotationOverlay({
               </div>
             </div>
           </foreignObject>
-        )}
+        ) : null}
       </svg>
     </div>
   );

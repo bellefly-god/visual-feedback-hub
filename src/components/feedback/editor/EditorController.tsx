@@ -86,7 +86,9 @@ export function EditorController() {
 
   const resolvedProjectId = normalizeProjectId(projectId ?? DEMO_PROJECT_ID);
   const stateProjectName = (location.state as { projectName?: string } | null)?.projectName;
-  const isCommentMode = Boolean(pendingAnnotation);
+  // isCommentMode: 只有非文本类型的 pendingAnnotation 才锁定工具
+  // 文本类型允许切换工具来取消输入
+  const isCommentMode = pendingAnnotation && pendingAnnotation.shapeType !== "text";
 
   const debugLog = useCallback(
     (...args: unknown[]) => {
