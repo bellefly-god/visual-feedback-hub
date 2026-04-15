@@ -9,7 +9,8 @@ import { routePaths } from "@/lib/routePaths";
 import { feedbackGateway } from "@/services/feedbackGateway";
 import type { ProjectListItem } from "@/types/feedback";
 
-const filters = ["All", "Pending", "Fixed", "Approved"] as const;
+// 简化后的过滤器：All / Open / Resolved
+const filters = ["All", "Open", "Resolved"] as const;
 const ITEMS_PER_PAGE = 6;
 
 export default function DashboardPage() {
