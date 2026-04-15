@@ -180,7 +180,9 @@ export function useImageInteractions({
 
       const clampedPoint = clampPointToBounds(point, bounds);
 
-      if (mode === "review") {
+      // review 模式下，select 工具直接返回
+      // 但其他工具（如 text）需要继续执行
+      if (mode === "review" && toolMode === "select") {
         onSelectAnnotation(null);
         return;
       }

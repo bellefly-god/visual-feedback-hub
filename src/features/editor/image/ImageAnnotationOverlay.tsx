@@ -423,97 +423,106 @@ export function ImageAnnotationOverlay({
 
         {/* 文本输入框 */}
         {pendingTextAnnotation && bounds ? (
-          <foreignObject
-            x={bounds.x + (bounds.width * pendingTextAnnotation.x) / 100}
-            y={bounds.y + (bounds.height * pendingTextAnnotation.y) / 100 - 70}
-            width="200"
-            height="70"
-            requiredExtensions="http://www.w3.org/1999/xhtml"
-          >
-            <div
-              xmlns="http://www.w3.org/1999/xhtml"
-              style={{
-                backgroundColor: pendingTextAnnotation.color,
-                borderColor: pendingTextAnnotation.color,
-                borderRadius: '8px',
-                borderWidth: '2px',
-                borderStyle: 'solid',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                padding: '8px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '4px',
-              }}
+          <>
+            {/* 调试用：显示位置标记 */}
+            <circle
+              cx={bounds.x + (bounds.width * pendingTextAnnotation.x) / 100}
+              cy={bounds.y + (bounds.height * pendingTextAnnotation.y) / 100}
+              r="5"
+              fill={pendingTextAnnotation.color}
+            />
+            <foreignObject
+              x={bounds.x + (bounds.width * pendingTextAnnotation.x) / 100}
+              y={bounds.y + (bounds.height * pendingTextAnnotation.y) / 100 - 70}
+              width="200"
+              height="70"
+              requiredExtensions="http://www.w3.org/1999/xhtml"
             >
-              <textarea
-                id="text-annotation-input"
+              <div
+                xmlns="http://www.w3.org/1999/xhtml"
                 style={{
-                  resize: 'none',
-                  border: 'none',
-                  background: 'transparent',
-                  outline: 'none',
-                  color: 'white',
-                  width: '100%',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  minHeight: '21px',
+                  backgroundColor: pendingTextAnnotation.color,
+                  borderColor: pendingTextAnnotation.color,
+                  borderRadius: '8px',
+                  borderWidth: '2px',
+                  borderStyle: 'solid',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  padding: '8px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
                 }}
-                placeholder="输入文字..."
-                rows={1}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    const value = (e.target as HTMLTextAreaElement).value;
-                    if (value.trim()) {
-                      onTextSubmit?.(value.trim());
-                    }
-                  } else if (e.key === "Escape") {
-                    e.preventDefault();
-                    onTextCancel?.();
-                  }
-                }}
-              />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                <button
+              >
+                <textarea
+                  id="text-annotation-input"
                   style={{
-                    height: '24px',
-                    padding: '0 8px',
-                    fontSize: '11px',
-                    color: 'rgba(255, 255, 255, 0.8)',
+                    resize: 'none',
+                    border: 'none',
                     background: 'transparent',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
+                    outline: 'none',
+                    color: 'white',
+                    width: '100%',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    minHeight: '21px',
                   }}
-                  onClick={() => onTextCancel?.()}
-                >
-                  取消
-                </button>
-                <button
-                  style={{
-                    height: '24px',
-                    padding: '0 8px',
-                    fontSize: '11px',
-                    color: '#1f2937',
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => {
-                    const textarea = document.getElementById("text-annotation-input") as HTMLTextAreaElement;
-                    const value = textarea?.value || "";
-                    if (value.trim()) {
-                      onTextSubmit?.(value.trim());
+                  placeholder="输入文字..."
+                  rows={1}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      const value = (e.target as HTMLTextAreaElement).value;
+                      if (value.trim()) {
+                        onTextSubmit?.(value.trim());
+                      }
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      onTextCancel?.();
                     }
                   }}
-                >
-                  确认
-                </button>
+                />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                  <button
+                    style={{
+                      height: '24px',
+                      padding: '0 8px',
+                      fontSize: '11px',
+                      color: 'rgba(255, 255, 255, 0.8)',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => onTextCancel?.()}
+                  >
+                    取消
+                  </button>
+                  <button
+                    style={{
+                      height: '24px',
+                      padding: '0 8px',
+                      fontSize: '11px',
+                      color: '#1f2937',
+                      background: 'rgba(255, 255, 255, 0.9)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      const textarea = document.getElementById("text-annotation-input") as HTMLTextAreaElement;
+                      const value = textarea?.value || "";
+                      if (value.trim()) {
+                        onTextSubmit?.(value.trim());
+                      }
+                    }}
+                  >
+                    确认
+                  </button>
+                </div>
               </div>
-            </div>
-          </foreignObject>
+            </foreignObject>
+          </>
         ) : null}
       </svg>
     </div>
