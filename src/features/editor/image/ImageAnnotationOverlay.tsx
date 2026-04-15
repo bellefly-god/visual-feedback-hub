@@ -1,4 +1,4 @@
-import { useState, useEffect, type PointerEvent, type PointerEventHandler } from "react";
+import { useState, useEffect, useRef, type PointerEvent, type PointerEventHandler } from "react";
 import type { AnnotationColorState } from "@/features/editor/shared/types/editor-state";
 import type { NormalizedAnnotation, ToolMode } from "@/features/editor/shared/types/annotation";
 import type { OverlayBounds } from "@/features/editor/shared/coords/normalizedCoords";
@@ -154,6 +154,19 @@ export function ImageAnnotationOverlay({
 }: ImageAnnotationOverlayProps) {
   const cursorClass = mode === "editor" && toolMode !== "select" ? "cursor-crosshair" : "cursor-default";
   const selectionOutlineColor = "rgba(15, 23, 42, 0.45)";
+
+  // 使用 ref 来聚焦 textarea，避免 autoFocus 可能导致的布局偏移
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 当 pendingTextAnnotation 出现时，延迟聚焦 textarea
+  useEffect(() => {
+    if (pendingTextAnnotation && textareaRef.current) {
+      const timer = requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+      return () => cancelAnimationFrame(timer);
+    }
+  }, [pendingTextAnnotation]);
 
   return (
     <div
@@ -452,8 +465,11 @@ export function ImageAnnotationOverlay({
                   flexDirection: 'column',
                   gap: '4px',
                 }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
               >
                 <textarea
+                  ref={textareaRef}
                   id="text-annotation-input"
                   style={{
                     resize: 'none',
@@ -468,7 +484,6 @@ export function ImageAnnotationOverlay({
                   }}
                   placeholder="输入文字..."
                   rows={1}
-                  autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -494,7 +509,11 @@ export function ImageAnnotationOverlay({
                       borderRadius: '4px',
                       cursor: 'pointer',
                     }}
-                    onClick={() => onTextCancel?.()}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onTextCancel?.();
+                    }}
                   >
                     取消
                   </button>
@@ -509,8 +528,10 @@ export function ImageAnnotationOverlay({
                       borderRadius: '4px',
                       cursor: 'pointer',
                     }}
-                    onClick={() => {
-                      const textarea = document.getElementById("text-annotation-input") as HTMLTextAreaElement;
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const textarea = textareaRef.current;
                       const value = textarea?.value || "";
                       if (value.trim()) {
                         onTextSubmit?.(value.trim());
