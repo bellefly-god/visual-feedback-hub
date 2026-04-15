@@ -451,28 +451,23 @@ export function EditorController() {
     }
   };
 
-  const handleMarkFixed = async () => {
+  // 简化：标记评论为已处理/重新打开
+  const handleToggleResolved = async () => {
     if (!activeComment) {
       return;
     }
 
     try {
-      // 根据当前状态决定下一个状态
-      // - reopen → pending (开始修复)
-      // - pending → fixed (标记已修复)
-      const nextStatus = activeComment.status === "reopen" ? "pending" : "fixed";
+      // 在 resolved 和 open 之间切换
+      const nextStatus = activeComment.status === "resolved" ? "open" : "resolved";
       
       const nextComments = await feedbackGateway.updateCommentStatus(activeComment.id, nextStatus);
       if (isImageEditor) {
         pushHistorySnapshot(captureHistorySnapshot());
       }
       applyNextComments(nextComments);
-      toast.success(nextStatus === "pending" ? "开始处理重新打开的评论" : "评论已标记为修复");
+      toast.success(nextStatus === "resolved" ? "评论已标记为已处理" : "评论已重新打开");
     } catch (error) {
-      if (error instanceof Error && error.message === "INVALID_STATUS_TRANSITION") {
-        toast.warning("当前状态不能进行此操作");
-        return;
-      }
       toast.error("无法更新状态，请稍后重试");
     }
   };
@@ -639,7 +634,7 @@ export function EditorController() {
               toast.info("草稿已丢弃");
             });
           }}
-          onMarkFixed={() => void handleMarkFixed()}
+          onMarkFixed={() => void handleToggleResolved()}
           onEditComment={handleEditComment}
           onDeleteComment={handleDeleteComment}
         />

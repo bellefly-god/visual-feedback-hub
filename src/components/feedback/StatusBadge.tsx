@@ -1,7 +1,7 @@
 /**
- * StatusBadge - 状态徽章组件
+ * StatusBadge - 简化版状态徽章
  * 
- * 显示评论状态的徽章
+ * 只显示两种状态：待处理/已处理
  */
 
 import { cn } from "@/lib/utils";
@@ -15,23 +15,17 @@ interface StatusBadgeProps {
 
 const STATUS_CONFIG: Record<
   CommentStatus,
-  { label: string; className: string }
+  { label: string; className: string; dotColor: string }
 > = {
-  pending: {
+  open: {
     label: "待处理",
     className: "bg-orange-100 text-orange-700 border-orange-200",
+    dotColor: "#f97316",
   },
-  fixed: {
-    label: "已修复",
-    className: "bg-blue-100 text-blue-700 border-blue-200",
-  },
-  approved: {
-    label: "已批准",
+  resolved: {
+    label: "已处理",
     className: "bg-green-100 text-green-700 border-green-200",
-  },
-  reopen: {
-    label: "已驳回",
-    className: "bg-red-100 text-red-700 border-red-200",
+    dotColor: "#22c55e",
   },
 };
 
@@ -55,16 +49,7 @@ export function StatusBadge({
           "rounded-full",
           size === "sm" ? "h-1.5 w-1.5" : "h-2 w-2"
         )}
-        style={{
-          backgroundColor:
-            status === "pending"
-              ? "#f97316"
-              : status === "fixed"
-              ? "#3b82f6"
-              : status === "approved"
-              ? "#22c55e"
-              : "#ef4444",
-        }}
+        style={{ backgroundColor: config.dotColor }}
       />
       {showLabel && config.label}
     </span>

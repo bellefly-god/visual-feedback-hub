@@ -499,7 +499,7 @@ export const supabaseFeedbackService = {
       color: input.color ?? null,
       shape_type: input.shapeType ?? "pin",
       content: input.content,
-      status: "pending",
+      status: "open",
       author_name: input.authorName,
       created_at: now,
       updated_at: now,

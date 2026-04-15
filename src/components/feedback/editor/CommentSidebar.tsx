@@ -1,18 +1,19 @@
 /**
- * CommentSidebar - 评论侧边栏（新版本）
+ * CommentSidebar - 评论侧边栏（简化版）
  * 
- * 支持：
+ * 简化后只支持：
  * - 评论列表
- * - 筛选功能
- * - 状态统计
- * - 删除确认
+ * - 添加评论
+ * - 回复评论
+ * - 删除评论
+ * 
+ * 不再支持状态筛选和状态操作
  */
 
 import { useState, useMemo } from "react";
-import { Plus, Filter, MessageSquare } from "lucide-react";
+import { Plus, MessageSquare, Check, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommentCard } from "@/components/feedback/CommentCard";
-import { StatusBadge } from "@/components/feedback/StatusBadge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import type { CommentView, CommentStatus } from "@/types/feedback";
@@ -27,8 +28,6 @@ interface CommentSidebarProps {
   onDeleteComment?: (id: string) => void;
   /** 是否显示添加按钮 */
   showAddButton?: boolean;
-  /** 是否显示筛选 */
-  showFilter?: boolean;
   /** 是否处于评论模式（有待处理的标注） */
   isCommentMode?: boolean;
   /** 是否有待处理的标注 */
@@ -45,11 +44,9 @@ interface CommentSidebarProps {
   onSubmitComment?: () => void;
   /** 取消草稿 */
   onCancelDraft?: () => void;
-  /** 标记为已修复 */
+  /** 切换已处理状态 */
   onMarkFixed?: () => void;
 }
-
-type FilterStatus = CommentStatus | "all";
 
 export function CommentSidebar({
   comments,
@@ -60,8 +57,6 @@ export function CommentSidebar({
   onEditComment,
   onDeleteComment,
   showAddButton = true,
-  showFilter = true,
-  isCommentMode,
   hasPendingAnnotation = false,
   draftComment,
   saveState = "idle",
@@ -71,35 +66,12 @@ export function CommentSidebar({
   onCancelDraft,
   onMarkFixed,
 }: CommentSidebarProps) {
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
-  
   // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     author: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // 筛选评论
-  const filteredComments = useMemo(() => {
-    if (filterStatus === "all") return comments;
-    return comments.filter((c) => c.status === filterStatus);
-  }, [comments, filterStatus]);
-
-  // 统计各状态数量
-  const statusCounts = useMemo(() => {
-    const counts: Record<FilterStatus, number> = {
-      all: comments.length,
-      pending: 0,
-      fixed: 0,
-      approved: 0,
-      reopen: 0,
-    };
-    comments.forEach((c) => {
-      counts[c.status]++;
-    });
-    return counts;
-  }, [comments]);
 
   // Handle delete with confirmation
   const handleDeleteClick = (id: string, author: string) => {
@@ -122,15 +94,6 @@ export function CommentSidebar({
     setDeleteTarget(null);
   };
 
-  // 筛选选项
-  const filterOptions: { value: FilterStatus; label: string }[] = [
-    { value: "all", label: `全部 (${statusCounts.all})` },
-    { value: "pending", label: `待处理 (${statusCounts.pending})` },
-    { value: "fixed", label: `已修复 (${statusCounts.fixed})` },
-    { value: "approved", label: `已批准 (${statusCounts.approved})` },
-    { value: "reopen", label: `已驳回 (${statusCounts.reopen})` },
-  ];
-
   return (
     <>
       <div className="flex h-full w-72 shrink-0 flex-col border-r border-border/60 bg-card">
@@ -141,17 +104,17 @@ export function CommentSidebar({
             <span className="text-[13px] font-medium">
               评论
               <span className="ml-1.5 text-muted-foreground">
-                {filteredComments.length}
+                {comments.length}
               </span>
             </span>
           </div>
 
-          {showAddButton && onAddComment && (
+          {showAddButton && onRequestPinMode && (
             <Button
               variant="ghost"
               size="sm"
               className="h-7 w-7 p-0"
-              onClick={onAddComment}
+              onClick={onRequestPinMode}
               title="添加评论"
             >
               <Plus className="h-4 w-4" />
@@ -159,40 +122,16 @@ export function CommentSidebar({
           )}
         </div>
 
-        {/* 筛选器 */}
-        {showFilter && (
-          <div className="border-b border-border/60 px-3 py-2">
-            <div className="flex flex-wrap gap-1">
-              {filterOptions.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setFilterStatus(option.value)}
-                  className={cn(
-                    "rounded-full px-2 py-0.5 text-[11px] transition-colors",
-                    filterStatus === option.value
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* 评论列表 */}
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
-          {filteredComments.length === 0 ? (
+          {comments.length === 0 ? (
             <div className="flex h-32 items-center justify-center">
               <p className="text-[13px] text-muted-foreground">
-                {filterStatus === "all"
-                  ? "暂无评论"
-                  : `暂无${filterStatus === "pending" ? "待处理" : filterStatus === "fixed" ? "已修复" : filterStatus === "approved" ? "已批准" : "已驳回"}的评论`}
+                暂无评论，点击画布添加标注
               </p>
             </div>
           ) : (
-            filteredComments.map((comment) => (
+            comments.map((comment) => (
               <CommentCard
                 key={comment.id}
                 comment={comment}
@@ -206,47 +145,34 @@ export function CommentSidebar({
           )}
         </div>
 
-        {/* 选中评论详情（可选） */}
-        {activeComment && (
+        {/* 选中评论操作 */}
+        {activeComment && onMarkFixed && (
           <div className="border-t border-border/60 p-3 space-y-2">
             <div className="text-[12px] font-medium text-foreground">
               已选择评论 #{activeComment.displayOrder}
             </div>
-            {/* 状态操作按钮 */}
-            {activeComment.status === "pending" && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full h-8 text-[12px]"
-                onClick={onMarkFixed}
-              >
-                标记已修复
-              </Button>
-            )}
-            {activeComment.status === "fixed" && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full h-8 text-[12px]"
-                onClick={onMarkFixed}
-              >
-                标记已修复
-              </Button>
-            )}
-            {activeComment.status === "reopen" && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full h-8 text-[12px]"
-                onClick={onMarkFixed}
-              >
-                开始处理
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full h-8 text-[12px]"
+              onClick={onMarkFixed}
+            >
+              {activeComment.status === "resolved" ? (
+                <>
+                  <RotateCcw className="h-3 w-3 mr-1.5" />
+                  重新打开
+                </>
+              ) : (
+                <>
+                  <Check className="h-3 w-3 mr-1.5" />
+                  标记已处理
+                </>
+              )}
+            </Button>
           </div>
         )}
 
-        {/* 草稿评论输入区域（待处理标注时显示） */}
+        {/* 草稿评论输入区域 */}
         {hasPendingAnnotation && (
           <div className="border-t border-border/60 p-3 space-y-2">
             <div className="text-[12px] font-medium text-foreground">
@@ -268,25 +194,14 @@ export function CommentSidebar({
               >
                 取消
               </Button>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-[12px]"
-                  onClick={onMarkFixed}
-                  disabled={saveState === "saving"}
-                >
-                  标记已修复
-                </Button>
-                <Button
-                  size="sm"
-                  className="h-8 text-[12px]"
-                  onClick={onSubmitComment}
-                  disabled={saveState === "saving"}
-                >
-                  {saveState === "saving" ? "提交中..." : "提交"}
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                className="h-8 text-[12px]"
+                onClick={onSubmitComment}
+                disabled={saveState === "saving"}
+              >
+                {saveState === "saving" ? "提交中..." : "提交"}
+              </Button>
             </div>
           </div>
         )}

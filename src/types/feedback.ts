@@ -1,6 +1,8 @@
 export type AssetType = "image" | "pdf" | "screenshot";
 
-export type CommentStatus = "pending" | "fixed" | "approved" | "reopen";
+// 简化后的评论状态 - 只需知道是否已回复
+// 后续可用于 "已解决" 状态
+export type CommentStatus = "open" | "resolved";
 
 export type AnnotationShape = "pin" | "pen" | "arrow" | "rectangle" | "highlight";
 
