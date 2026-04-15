@@ -1,10 +1,10 @@
 import type { AnnotationShape } from "@/types/feedback";
 
-export type ToolMode = "select" | "pin" | "pen" | "arrow" | "rectangle" | "highlight";
+export type ToolMode = "select" | "pin" | "pen" | "arrow" | "rectangle" | "highlight" | "text";
 
 export type AnnotationShapeMode = Exclude<ToolMode, "select">;
 
-export type DragToolMode = Extract<ToolMode, "arrow" | "rectangle" | "highlight">;
+export type DragToolMode = Extract<ToolMode, "arrow" | "rectangle" | "highlight" | "text">;
 
 export interface NormalizedAnnotation {
   id: string;

@@ -23,6 +23,7 @@ import {
   withPendingAnnotation,
 } from "@/features/editor/shared/links/commentAnnotationLink";
 import { toast } from "sonner";
+import { InlineTextInput } from "@/components/feedback/InlineTextInput";
 
 interface AnnotationHistorySnapshot {
   comments: CommentView[];
@@ -382,8 +383,20 @@ export function EditorController() {
       setDraftComment("");
     }
 
-    // Simplified flow: create annotation directly as pending comment
-    // Comments are optional - user can add comment or discard
+    // 文本工具特殊处理：创建后显示内联输入框
+    if (payload.shapeType === "text") {
+      setPendingAnnotation({
+        id: createDraftAnnotationId(),
+        status: "draft",
+        ...payload,
+        color: sanitizeAnnotationColor(payload.color),
+        textContent: "", // 空文字，等待用户输入
+        page: assetType === "pdf" ? currentPdfPage : undefined,
+      });
+      return; // 不显示 toast，InlineTextInput 会接管
+    }
+
+    // 其他工具（pin, arrow, pen 等）：创建为草稿评论
     recordImageAction(() => {
       setPendingAnnotation({
         id: createDraftAnnotationId(),
@@ -395,6 +408,54 @@ export function EditorController() {
       setActiveCommentId(null);
       toast.info("标注已创建，输入评论后提交或点击取消丢弃");
     });
+  };
+
+  // 处理文本工具的文字提交
+  const handleTextSubmit = async (text: string) => {
+    if (!pendingAnnotation || pendingAnnotation.shapeType !== "text") {
+      return;
+    }
+
+    setSaveState("saving");
+    toast.loading("提交中...");
+
+    try {
+      // 文本标注：text 作为 content 提交
+      const nextComments = await feedbackGateway.createComment({
+        projectId: resolvedProjectId,
+        content: text, // 文字内容作为评论内容
+        x: pendingAnnotation.x,
+        y: pendingAnnotation.y,
+        width: pendingAnnotation.width,
+        height: pendingAnnotation.height,
+        pathPoints: pendingAnnotation.pathPoints,
+        color: pendingAnnotation.color,
+        page: pendingAnnotation.page,
+        authorName: "You",
+        shapeType: "text",
+        // 额外存储文字内容
+      });
+
+      if (isImageEditor) {
+        pushHistorySnapshot(captureHistorySnapshot());
+      }
+
+      applyNextComments(nextComments);
+      setPendingAnnotation(null);
+      toast.success("文字已添加！");
+      setActiveCommentId(nextComments[nextComments.length - 1]?.id ?? null);
+      setSaveState("saved");
+    } catch (error) {
+      console.error("Failed to add text:", error);
+      toast.error("添加文字失败，请重试");
+      setSaveState("idle");
+    }
+  };
+
+  // 处理文本工具的取消
+  const handleTextCancel = () => {
+    setPendingAnnotation(null);
+    toast.info("已取消");
   };
 
   const handleSubmitComment = async () => {
@@ -670,6 +731,19 @@ export function EditorController() {
                     zoomLevel={zoomLevel}
                     onZoomChange={setZoomLevel}
                   />
+
+                  {/* 文本工具的内联输入框 */}
+                  {pendingAnnotation?.shapeType === "text" && (
+                    <InlineTextInput
+                      x={pendingAnnotation.x}
+                      y={pendingAnnotation.y}
+                      color={pendingAnnotation.color || activeAnnotationColor}
+                      fontSize={pendingAnnotation.fontSize ?? 14}
+                      initialText={pendingAnnotation.textContent || ""}
+                      onSubmit={handleTextSubmit}
+                      onCancel={handleTextCancel}
+                    />
+                  )}
                 </div>
               </div>
             </div>

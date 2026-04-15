@@ -4,7 +4,7 @@ export type AssetType = "image" | "pdf" | "screenshot";
 // 后续可用于 "已解决" 状态
 export type CommentStatus = "open" | "resolved";
 
-export type AnnotationShape = "pin" | "pen" | "arrow" | "rectangle" | "highlight";
+export type AnnotationShape = "pin" | "pen" | "arrow" | "rectangle" | "highlight" | "text";
 
 export interface ProjectRecord {
   id: string;

@@ -36,7 +36,11 @@ interface UseImageInteractionsParams {
 }
 
 function isDragToolMode(mode: ToolMode): mode is DragToolMode {
-  return mode === "arrow" || mode === "rectangle" || mode === "highlight";
+  return mode === "arrow" || mode === "rectangle" || mode === "highlight" || mode === "text";
+}
+
+function isTextToolMode(mode: ToolMode): mode is "text" {
+  return mode === "text";
 }
 
 export function useImageInteractions({
@@ -193,6 +197,20 @@ export function useImageInteractions({
           x: normalizedPoint.x,
           y: normalizedPoint.y,
           color: activeColor,
+        });
+        return;
+      }
+
+      // 文本工具：点击放置文字
+      if (isTextToolMode(toolMode)) {
+        const normalizedPoint = toNormalizedPoint(bounds, clampedPoint);
+        onCreateAnnotation?.({
+          shapeType: "text",
+          x: normalizedPoint.x,
+          y: normalizedPoint.y,
+          color: activeColor,
+          textContent: "", // 空文字，等待用户输入
+          fontSize: 14,
         });
         return;
       }

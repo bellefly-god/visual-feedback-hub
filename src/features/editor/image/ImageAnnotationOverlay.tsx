@@ -317,6 +317,61 @@ export function ImageAnnotationOverlay({
               );
             }
 
+            case "text": {
+              // 文字标注：直接在图片上显示文字
+              const textX = annotation.x;
+              const textY = annotation.y;
+              const fontSize = annotation.fontSize ?? 14;
+              const textContent = annotation.textContent || "";
+              
+              return (
+                <g key={annotation.id} className="cursor-pointer" onPointerDown={selectAnnotation}>
+                  {isSelected && (
+                    // 选中时的背景框
+                    <rect
+                      x={textX - 4}
+                      y={textY - fontSize - 4}
+                      width={Math.max(textContent.length * fontSize * 0.6 + 8, 40)}
+                      height={fontSize + 12}
+                      rx={4}
+                      fill={toRgba(baseColor, 0.15)}
+                      stroke={strokeColor}
+                      strokeWidth={1.5}
+                      strokeDasharray="4 2"
+                    />
+                  )}
+                  {textContent ? (
+                    // 有内容时显示文字
+                    <text
+                      x={textX}
+                      y={textY}
+                      fontSize={fontSize}
+                      fontWeight={annotation.fontWeight ?? 500}
+                      fill={strokeColor}
+                      textAnchor="start"
+                      dominantBaseline="auto"
+                    >
+                      {textContent}
+                    </text>
+                  ) : (
+                    // 无内容时显示占位符
+                    <text
+                      x={textX}
+                      y={textY}
+                      fontSize={fontSize}
+                      fontWeight={500}
+                      fill={strokeColor}
+                      textAnchor="start"
+                      dominantBaseline="auto"
+                      opacity={0.6}
+                    >
+                      点击添加文字
+                    </text>
+                  )}
+                </g>
+              );
+            }
+
             default: {
               const pin = getPinGeometry(annotation, bounds);
               return (
