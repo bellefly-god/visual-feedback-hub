@@ -417,7 +417,7 @@ export function EditorController() {
     }
 
     setSaveState("saving");
-    toast.loading("提交中...");
+    const loadingToastId = toast.loading("提交中...");
 
     try {
       // 文本标注：text 作为 content 提交
@@ -433,21 +433,24 @@ export function EditorController() {
         page: pendingAnnotation.page,
         authorName: "You",
         shapeType: "text",
-        // 额外存储文字内容
       });
 
       if (isImageEditor) {
         pushHistorySnapshot(captureHistorySnapshot());
       }
 
-      applyNextComments(nextComments);
+      // 更新评论列表（如果有返回）
+      if (nextComments && nextComments.length > 0) {
+        applyNextComments(nextComments);
+        setActiveCommentId(nextComments[nextComments.length - 1]?.id ?? null);
+      }
+
       setPendingAnnotation(null);
-      toast.success("文字已添加！");
-      setActiveCommentId(nextComments[nextComments.length - 1]?.id ?? null);
+      toast.success("文字已添加！", { id: loadingToastId });
       setSaveState("saved");
     } catch (error) {
       console.error("Failed to add text:", error);
-      toast.error("添加文字失败，请重试");
+      toast.error("添加文字失败，请重试", { id: loadingToastId });
       setSaveState("idle");
     }
   };
@@ -465,9 +468,9 @@ export function EditorController() {
       return;
     }
 
-    // Show saving state
+    // Show saving state - 保存 toast id 以便后续替换
     setSaveState("saving");
-    toast.loading("提交中...");
+    const loadingToastId = toast.loading("提交中...");
 
     try {
       const shapeType: AnnotationShapeMode = pendingAnnotation.shapeType;
@@ -496,26 +499,22 @@ export function EditorController() {
         setActiveCommentId(nextComments[nextComments.length - 1]?.id ?? null);
       } else {
         // 评论已创建，但获取列表失败，刷新页面获取最新数据
+        toast.dismiss(loadingToastId);
         window.location.reload();
         return;
       }
 
       setDraftComment("");
       setPendingAnnotation(null);
-      toast.success("评论提交成功！");
+      // 使用相同的 id 替换 loading toast
+      toast.success("评论提交成功！", { id: loadingToastId });
       setSaveState("saved");
     } catch (error) {
       // 更详细的错误日志
       console.error("Failed to submit comment:", error);
-      console.error("Comment input details:", {
-        projectId: resolvedProjectId,
-        content: content,
-        pendingAnnotation: pendingAnnotation,
-        shapeType: shapeType,
-      });
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("Error message:", errorMessage);
-      toast.error(`提交评论失败：${errorMessage}，请重试`);
+      // 使用相同的 id 替换 loading toast
+      toast.error(`提交评论失败：${errorMessage}，请重试`, { id: loadingToastId });
       setSaveState("idle");
     }
   };

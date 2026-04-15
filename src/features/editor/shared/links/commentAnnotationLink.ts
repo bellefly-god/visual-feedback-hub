@@ -30,6 +30,8 @@ export function commentsToAnnotations(comments: CommentView[]): NormalizedAnnota
     color: comment.color,
     status: "saved",
     pinNumber: comment.displayOrder,
+    // 文字标注内容
+    textContent: comment.textContent,
   }));
 }
 

@@ -78,6 +78,8 @@ export interface CommentView {
   pinNumber: number;
   replies: CommentReplyView[];
   createdAt: string;
+  /** 文字标注的文本内容 */
+  textContent?: string;
 }
 
 export interface ProjectListItem {

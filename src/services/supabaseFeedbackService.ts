@@ -70,8 +70,9 @@ type CommentRow = {
   height: number | null;
   path_points: Array<{ x: number; y: number }> | null;
   color: string | null;
-  shape_type: "pin" | "pen" | "arrow" | "rectangle" | "highlight";
+  shape_type: "pin" | "pen" | "arrow" | "rectangle" | "highlight" | "text";
   content: string;
+  text_content: string | null;
   voice_note_url: string | null;
   status: CommentStatus;
   author_name: string;
@@ -120,7 +121,9 @@ type CreateCommentInput = {
   color?: string;
   page?: number;
   authorName: string;
-  shapeType?: "pin" | "pen" | "arrow" | "rectangle" | "highlight";
+  shapeType?: "pin" | "pen" | "arrow" | "rectangle" | "highlight" | "text";
+  /** 文字标注的文本内容 */
+  textContent?: string;
 };
 
 type CreateReplyInput = {
@@ -317,6 +320,8 @@ function toCommentView(comment: CommentRow, displayOrder: number, replies: Reply
       createdAt: toRelativeTimeLabel(reply.createdAt),
     })),
     createdAt: toRelativeTimeLabel(comment.created_at),
+    // 文字标注的文本内容
+    textContent: comment.text_content ?? undefined,
   };
 }
 
@@ -536,6 +541,7 @@ export const supabaseFeedbackService = {
       content: input.content,
       status: "open",
       author_name: input.authorName,
+      text_content: input.textContent ?? null,
       created_at: now,
       updated_at: now,
     };
@@ -550,6 +556,7 @@ export const supabaseFeedbackService = {
       const legacyPayload: Omit<typeof payload, "color" | "display_order" | "path_points"> & {
         color?: string | null;
         path_points?: Array<{ x: number; y: number }> | null;
+        text_content?: string | null;
       } = {
         id: payload.id,
         project_id: payload.project_id,
@@ -571,6 +578,7 @@ export const supabaseFeedbackService = {
       if (!isMissingPathPointsColumnError(error)) {
         legacyPayload.path_points = payload.path_points;
       }
+      legacyPayload.text_content = payload.text_content;
       ({ error } = await db.from("comments").insert(legacyPayload));
     }
 

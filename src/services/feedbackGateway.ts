@@ -27,6 +27,8 @@ export interface CreateCommentInput {
   page?: number;
   authorName: string;
   shapeType: AnnotationShape;
+  /** 文字标注的文本内容 */
+  textContent?: string;
 }
 
 export interface AddReplyInput {
