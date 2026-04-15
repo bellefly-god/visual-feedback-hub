@@ -29,6 +29,8 @@ export interface CreateCommentInput {
   shapeType: AnnotationShape;
   /** 文字标注的文本内容 */
   textContent?: string;
+  /** 显示顺序 */
+  displayOrder?: number;
 }
 
 export interface AddReplyInput {

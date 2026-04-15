@@ -124,6 +124,8 @@ type CreateCommentInput = {
   shapeType?: "pin" | "pen" | "arrow" | "rectangle" | "highlight" | "text";
   /** 文字标注的文本内容 */
   textContent?: string;
+  /** 显示顺序 */
+  displayOrder?: number;
 };
 
 type CreateReplyInput = {
@@ -507,23 +509,26 @@ export const supabaseFeedbackService = {
   async createComment(input: CreateCommentInput): Promise<CommentView[]> {
     const db = assertSupabase();
     const now = getNowIso();
-    let nextDisplayOrder = 1;
+    let nextDisplayOrder = input.displayOrder ?? 1;
     let supportsDisplayOrder = true;
 
-    const { data: lastWithOrder, error: orderLookupError } = await db
-      .from("comments")
-      .select("display_order")
-      .eq("project_id", input.projectId)
-      .order("display_order", { ascending: false, nullsFirst: false })
-      .limit(1)
-      .maybeSingle();
+    // 只有在未指定 displayOrder 时才查找最大值
+    if (input.displayOrder === undefined) {
+      const { data: lastWithOrder, error: orderLookupError } = await db
+        .from("comments")
+        .select("display_order")
+        .eq("project_id", input.projectId)
+        .order("display_order", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (isMissingDisplayOrderColumnError(orderLookupError)) {
-      supportsDisplayOrder = false;
-    } else if (orderLookupError) {
-      throw orderLookupError;
-    } else {
-      nextDisplayOrder = ((lastWithOrder as { display_order: number | null } | null)?.display_order ?? 0) + 1;
+      if (isMissingDisplayOrderColumnError(orderLookupError)) {
+        supportsDisplayOrder = false;
+      } else if (orderLookupError) {
+        throw orderLookupError;
+      } else {
+        nextDisplayOrder = ((lastWithOrder as { display_order: number | null } | null)?.display_order ?? 0) + 1;
+      }
     }
 
     const payload = {

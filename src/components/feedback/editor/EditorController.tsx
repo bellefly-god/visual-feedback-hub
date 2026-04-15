@@ -23,7 +23,6 @@ import {
   withPendingAnnotation,
 } from "@/features/editor/shared/links/commentAnnotationLink";
 import { toast } from "sonner";
-import { InlineTextInput } from "@/components/feedback/InlineTextInput";
 
 interface AnnotationHistorySnapshot {
   comments: CommentView[];
@@ -420,6 +419,9 @@ export function EditorController() {
     const loadingToastId = toast.loading("提交中...");
 
     try {
+      // 计算显示顺序：基于现有评论数量
+      const nextDisplayOrder = (comments.length || 0) + 1;
+
       // 文本标注：text 同时作为 content 和 textContent
       const nextComments = await feedbackGateway.createComment({
         projectId: resolvedProjectId,
@@ -434,6 +436,7 @@ export function EditorController() {
         authorName: "You",
         shapeType: "text",
         textContent: text, // 单独存储文字内容以便渲染
+        displayOrder: nextDisplayOrder,
       });
 
       if (isImageEditor) {
@@ -738,20 +741,18 @@ export function EditorController() {
                     onCreateAnnotation={handleCreateAnnotation}
                     zoomLevel={zoomLevel}
                     onZoomChange={setZoomLevel}
+                    pendingTextAnnotation={
+                      pendingAnnotation?.shapeType === "text"
+                        ? {
+                            x: pendingAnnotation.x,
+                            y: pendingAnnotation.y,
+                            color: pendingAnnotation.color || activeAnnotationColor,
+                          }
+                        : null
+                    }
+                    onTextSubmit={handleTextSubmit}
+                    onTextCancel={handleTextCancel}
                   />
-
-                  {/* 文本工具的内联输入框 */}
-                  {pendingAnnotation?.shapeType === "text" && (
-                    <InlineTextInput
-                      x={pendingAnnotation.x}
-                      y={pendingAnnotation.y}
-                      color={pendingAnnotation.color || activeAnnotationColor}
-                      fontSize={pendingAnnotation.fontSize ?? 14}
-                      initialText={pendingAnnotation.textContent || ""}
-                      onSubmit={handleTextSubmit}
-                      onCancel={handleTextCancel}
-                    />
-                  )}
                 </div>
               </div>
             </div>

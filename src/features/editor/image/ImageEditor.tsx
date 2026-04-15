@@ -18,6 +18,12 @@ interface ImageEditorProps {
   selectedAnnotationId: string | null;
   onSelectAnnotation: (annotationId: string | null) => void;
   onCreateAnnotation?: (payload: CreateAnnotationPayload) => void;
+  /** 待处理的文本标注（用于显示输入框） */
+  pendingTextAnnotation?: { x: number; y: number; color: string } | null;
+  /** 文本提交回调 */
+  onTextSubmit?: (text: string) => void;
+  /** 文本取消回调 */
+  onTextCancel?: () => void;
 }
 
 interface TransformState {
@@ -68,6 +74,9 @@ export function ImageEditor({
   selectedAnnotationId,
   onSelectAnnotation,
   onCreateAnnotation,
+  pendingTextAnnotation,
+  onTextSubmit,
+  onTextCancel,
 }: ImageEditorProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [bounds, setBounds] = useState<OverlayBounds | null>(null);
@@ -185,6 +194,9 @@ export function ImageEditor({
           onPointerMove={handlers.onPointerMove}
           onPointerUp={handlers.onPointerUp}
           onPointerCancel={handlers.onPointerCancel}
+          pendingTextAnnotation={pendingTextAnnotation}
+          onTextSubmit={onTextSubmit}
+          onTextCancel={onTextCancel}
         />
       </div>
 

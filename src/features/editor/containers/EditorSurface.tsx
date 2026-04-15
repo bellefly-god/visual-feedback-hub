@@ -19,6 +19,12 @@ interface EditorSurfaceProps {
   onTextCommit?: (annotationId: string, text: string) => void;
   zoomLevel?: number;
   onZoomChange?: (zoom: number) => void;
+  /** 待处理的文本标注（用于显示输入框） */
+  pendingTextAnnotation?: { x: number; y: number; color: string } | null;
+  /** 文本提交回调 */
+  onTextSubmit?: (text: string) => void;
+  /** 文本取消回调 */
+  onTextCancel?: () => void;
 }
 
 export function EditorSurface({
@@ -37,6 +43,9 @@ export function EditorSurface({
   onTextCommit,
   zoomLevel,
   onZoomChange,
+  pendingTextAnnotation,
+  onTextSubmit,
+  onTextCancel,
 }: EditorSurfaceProps) {
   if (assetType === "pdf") {
     return (
@@ -71,6 +80,9 @@ export function EditorSurface({
       onCreateAnnotation={onCreateAnnotation}
       onTextEdit={onTextEdit}
       onTextCommit={onTextCommit}
+      pendingTextAnnotation={pendingTextAnnotation}
+      onTextSubmit={onTextSubmit}
+      onTextCancel={onTextCancel}
     />
   );
 }

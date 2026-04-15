@@ -12,8 +12,8 @@ import { cn } from "@/lib/utils";
 import { toRgba } from "@/features/editor/shared/colors/annotationColor";
 
 interface InlineTextInputProps {
-  x: number; // 百分比位置
-  y: number; // 百分比位置
+  x: number; // 百分比位置 (0-100)
+  y: number; // 百分比位置 (0-100)
   color: string;
   fontSize?: number;
   initialText?: string;
@@ -34,6 +34,7 @@ export function InlineTextInput({
 }: InlineTextInputProps) {
   const [text, setText] = useState(initialText);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -63,11 +64,14 @@ export function InlineTextInput({
 
   return (
     <div
+      ref={containerRef}
       className="absolute z-50"
       style={{
+        // 使用百分比定位，与 SVG 坐标系统一致
         left: `${x}%`,
         top: `${y}%`,
-        transform: "translate(-4px, -24px)",
+        // 微调位置，让输入框出现在点击点附近
+        transform: "translate(0, -100%)",
       }}
     >
       {/* 输入框 */}

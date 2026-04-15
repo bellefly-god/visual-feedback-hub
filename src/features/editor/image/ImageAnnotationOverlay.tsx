@@ -41,6 +41,12 @@ interface ImageAnnotationOverlayProps {
   onPointerMove: PointerEventHandler<HTMLDivElement>;
   onPointerUp: PointerEventHandler<HTMLDivElement>;
   onPointerCancel: PointerEventHandler<HTMLDivElement>;
+  /** 待处理的文本标注（用于显示输入框） */
+  pendingTextAnnotation?: { x: number; y: number; color: string } | null;
+  /** 文本提交回调 */
+  onTextSubmit?: (text: string) => void;
+  /** 文本取消回调 */
+  onTextCancel?: () => void;
 }
 
 function renderPreview(preview: InteractionPreview, colors: AnnotationColorState) {
@@ -141,6 +147,9 @@ export function ImageAnnotationOverlay({
   onPointerMove,
   onPointerUp,
   onPointerCancel,
+  pendingTextAnnotation,
+  onTextSubmit,
+  onTextCancel,
 }: ImageAnnotationOverlayProps) {
   const cursorClass = mode === "editor" && toolMode !== "select" ? "cursor-crosshair" : "cursor-default";
   const selectionOutlineColor = "rgba(15, 23, 42, 0.45)";
@@ -323,6 +332,7 @@ export function ImageAnnotationOverlay({
               const textY = annotation.y;
               const fontSize = annotation.fontSize ?? 14;
               const textContent = annotation.textContent || "";
+              const displayOrder = annotation.displayOrder ?? annotation.pinNumber ?? 0;
               
               return (
                 <g key={annotation.id} className="cursor-pointer" onPointerDown={selectAnnotation}>
@@ -342,17 +352,35 @@ export function ImageAnnotationOverlay({
                   )}
                   {textContent ? (
                     // 有内容时显示文字
-                    <text
-                      x={textX}
-                      y={textY}
-                      fontSize={fontSize}
-                      fontWeight={annotation.fontWeight ?? 500}
-                      fill={strokeColor}
-                      textAnchor="start"
-                      dominantBaseline="auto"
-                    >
-                      {textContent}
-                    </text>
+                    <>
+                      <text
+                        x={textX}
+                        y={textY}
+                        fontSize={fontSize}
+                        fontWeight={annotation.fontWeight ?? 500}
+                        fill={strokeColor}
+                        textAnchor="start"
+                        dominantBaseline="auto"
+                      >
+                        {textContent}
+                      </text>
+                      {displayOrder > 0 && (
+                        <g transform={`translate(${textX + textContent.length * fontSize * 0.6 + 8}, ${textY - fontSize - 4})`}>
+                          <circle cx="6" cy="6" r="6" fill={strokeColor} />
+                          <text
+                            x="6"
+                            y="6"
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fontSize="9"
+                            fontWeight="600"
+                            fill="#ffffff"
+                          >
+                            {displayOrder}
+                          </text>
+                        </g>
+                      )}
+                    </>
                   ) : (
                     // 无内容时显示占位符
                     <text
@@ -390,6 +418,68 @@ export function ImageAnnotationOverlay({
         })}
 
         {preview && renderPreview(preview, colors)}
+
+        {/* 文本输入框 */}
+        {pendingTextAnnotation && bounds && (
+          <foreignObject
+            x={bounds.x + (bounds.width * pendingTextAnnotation.x) / 100}
+            y={bounds.y + (bounds.height * pendingTextAnnotation.y) / 100 - 70}
+            width="200"
+            height="70"
+            style={{ overflow: "visible" }}
+          >
+            <div
+              className="rounded-lg border-2 shadow-lg p-2 flex flex-col gap-1"
+              style={{
+                backgroundColor: pendingTextAnnotation.color + "f0",
+                borderColor: pendingTextAnnotation.color,
+              }}
+              xmlns="http://www.w3.org/1999/xhtml"
+            >
+              {/* 使用原生 HTML 方式避免 React 状态管理复杂化 */}
+              <textarea
+                id="text-annotation-input"
+                className="resize-none border-0 bg-transparent outline-none text-white placeholder:text-white/60 w-full"
+                placeholder="输入文字..."
+                style={{ fontSize: 14, fontWeight: 500, minHeight: 21 }}
+                rows={1}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    const value = (e.target as HTMLTextAreaElement).value;
+                    if (value.trim()) {
+                      onTextSubmit?.(value.trim());
+                    }
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    onTextCancel?.();
+                  }
+                }}
+              />
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  className="h-6 px-2 text-[11px] text-white/80 hover:text-white hover:bg-white/20 rounded"
+                  onClick={() => onTextCancel?.()}
+                >
+                  取消
+                </button>
+                <button
+                  className="h-6 px-2 text-[11px] bg-white/90 text-gray-800 hover:bg-white rounded"
+                  onClick={() => {
+                    const textarea = document.getElementById("text-annotation-input") as HTMLTextAreaElement;
+                    const value = textarea?.value || "";
+                    if (value.trim()) {
+                      onTextSubmit?.(value.trim());
+                    }
+                  }}
+                >
+                  确认
+                </button>
+              </div>
+            </div>
+          </foreignObject>
+        )}
       </svg>
     </div>
   );

@@ -16,7 +16,6 @@ import { feedbackGateway } from "@/services/feedbackGateway";
 import type { CommentView } from "@/types/feedback";
 import { EditorSurface } from "@/features/editor/containers/EditorSurface";
 import { AnnotationToolbar } from "@/components/feedback/AnnotationToolbar";
-import { InlineTextInput } from "@/components/feedback/InlineTextInput";
 import { commentsToAnnotations, createDraftAnnotationId, withPendingAnnotation, isDraftAnnotationId, type PendingAnnotation } from "@/features/editor/shared/links/commentAnnotationLink";
 import type { AnnotationShapeMode, ToolMode } from "@/features/editor/shared/types/annotation";
 import { DEFAULT_ANNOTATION_COLOR, sanitizeAnnotationColor } from "@/features/editor/shared/colors/annotationColor";
@@ -264,6 +263,9 @@ export default function ReviewPage() {
         return;
       }
       
+      // 计算显示顺序：基于现有评论数量
+      const nextDisplayOrder = (comments.length || 0) + 1;
+      
       const nextComments = await feedbackGateway.createComment({
         projectId: actualProjectId,
         content: text,
@@ -277,6 +279,7 @@ export default function ReviewPage() {
         authorName: name,
         shapeType: "text",
         textContent: text, // 单独存储文字内容以便渲染
+        displayOrder: nextDisplayOrder,
       });
       
       // 更新评论列表（如果有返回）
@@ -453,20 +456,18 @@ export default function ReviewPage() {
                 onCreateAnnotation={handleCreateAnnotation}
                 zoomLevel={zoomLevel}
                 onZoomChange={setZoomLevel}
+                pendingTextAnnotation={
+                  pendingAnnotation?.shapeType === "text"
+                    ? {
+                        x: pendingAnnotation.x,
+                        y: pendingAnnotation.y,
+                        color: pendingAnnotation.color || activeColor,
+                      }
+                    : null
+                }
+                onTextSubmit={handleTextSubmit}
+                onTextCancel={handleCancelDraft}
               />
-              
-              {/* 文本输入框 */}
-              {pendingAnnotation?.shapeType === "text" && (
-                <InlineTextInput
-                  x={pendingAnnotation.x}
-                  y={pendingAnnotation.y}
-                  color={pendingAnnotation.color || activeColor}
-                  fontSize={pendingAnnotation.fontSize ?? 14}
-                  initialText={pendingAnnotation.textContent || ""}
-                  onSubmit={handleTextSubmit}
-                  onCancel={handleCancelDraft}
-                />
-              )}
             </div>
           </div>
           
