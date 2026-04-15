@@ -233,7 +233,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Recent Projects (if any) */}
+      {/* Recent Projects (if any) - 只展示列表，不可点击 */}
       {recentProjects.length > 0 && !isLoading && (
         <section className="mx-auto max-w-3xl px-6 pb-28">
           <h2 className="mb-8 text-center font-display text-xl font-semibold text-foreground">
@@ -243,21 +243,17 @@ export default function LandingPage() {
             {recentProjects.map((project, i) => (
               <motion.div
                 key={project.id}
-                className="rounded-xl border border-border/60 bg-card p-4 transition-colors hover:bg-muted/30"
+                className="rounded-xl border border-border/60 bg-card p-4"
                 initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08, duration: 0.4 }}
               >
-                <Link
-                  to={routePaths.editor(project.id)}
-                  className="block"
-                >
-                  <h4 className="truncate text-[14px] font-medium text-foreground">{project.name}</h4>
-                  <p className="mt-1 text-[12px] text-muted-foreground">
-                    {project.commentCount} comment{project.commentCount !== 1 ? "s" : ""} • {project.date}
-                  </p>
-                </Link>
+                {/* 只展示信息，不提供点击跳转，避免权限问题 */}
+                <h4 className="truncate text-[14px] font-medium text-foreground">{project.name}</h4>
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  {project.commentCount} comment{project.commentCount !== 1 ? "s" : ""} • {project.date}
+                </p>
               </motion.div>
             ))}
           </div>

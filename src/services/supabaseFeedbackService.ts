@@ -1,6 +1,7 @@
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { canTransitionStatus, deriveProjectStatus } from "@/lib/status";
 import { supabase } from "@/services/supabaseClient";
+import { getCurrentUser } from "@/services/supabaseAuthService";
 import { isUuid } from "@/lib/routePaths";
 import type {
   CommentStatus,
@@ -103,6 +104,39 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("FILE_READ_FAILED"));
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * 获取当前用户的 ID
+ * - 已登录用户返回用户 ID
+ * - 未登录返回 owner-demo
+ */
+async function getCurrentUserId(): Promise<string> {
+  try {
+    const user = await getCurrentUser();
+    return user?.id ?? "owner-demo";
+  } catch {
+    return "owner-demo";
+  }
+}
+
+/**
+ * 获取当前用户的 ID（同步方式，仅当有缓存会话时有效）
+ */
+function getCurrentUserIdSync(): string {
+  // 尝试从 localStorage 获取缓存的会话
+  const cached = localStorage.getItem("supabase-auth");
+  if (cached) {
+    try {
+      const session = JSON.parse(cached);
+      if (session?.user?.id) {
+        return session.user.id;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return "owner-demo";
 }
 
 function assertSupabase() {
@@ -274,9 +308,26 @@ export const supabaseFeedbackService = {
   async listProjects(): Promise<ProjectListItem[]> {
     const db = assertSupabase();
 
+    // 获取当前用户的 ID，用于过滤项目列表
+    const userId = await getCurrentUserId();
+    const isLoggedIn = userId !== "owner-demo";
+
+    // 构建查询条件：
+    // - 已登录用户：只显示自己的项目
+    // - 未登录用户：只显示 demo 项目（owner-demo）
+    let projectsQuery = db.from("projects").select("*");
+    if (isLoggedIn) {
+      // 过滤当前用户的项目
+      projectsQuery = projectsQuery.eq("owner_id", userId);
+    } else {
+      // 只显示 demo 项目
+      projectsQuery = projectsQuery.eq("owner_id", "owner-demo");
+    }
+    projectsQuery = projectsQuery.order("created_at", { ascending: false });
+
     const [{ data: projectRows, error: projectError }, { data: commentRows, error: commentError }] =
       await Promise.all([
-        db.from("projects").select("*").order("created_at", { ascending: false }),
+        projectsQuery,
         db.from("comments").select("project_id,status"),
       ]);
 
@@ -330,10 +381,13 @@ export const supabaseFeedbackService = {
     const db = assertSupabase();
     const now = getNowIso();
 
+    // 获取当前用户 ID，未登录则使用 owner-demo
+    const userId = await getCurrentUserId();
+
     const payload = {
       id: input.id && isUuid(input.id) ? input.id : crypto.randomUUID(),
       title: input.title,
-      owner_id: input.ownerId ?? "owner-demo",
+      owner_id: input.ownerId ?? userId,
       asset_type: input.assetType,
       asset_url: input.assetUrl ?? "",
       created_at: now,

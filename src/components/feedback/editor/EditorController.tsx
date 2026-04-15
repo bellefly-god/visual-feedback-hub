@@ -436,8 +436,17 @@ export function EditorController() {
       setActiveCommentId(nextComments[nextComments.length - 1]?.id ?? null);
       setSaveState("saved");
     } catch (error) {
+      // 更详细的错误日志
       console.error("Failed to submit comment:", error);
-      toast.error("提交评论失败，请重试");
+      console.error("Comment input details:", {
+        projectId: resolvedProjectId,
+        content: content,
+        pendingAnnotation: pendingAnnotation,
+        shapeType: shapeType,
+      });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Error message:", errorMessage);
+      toast.error(`提交评论失败：${errorMessage}，请重试`);
       setSaveState("idle");
     }
   };

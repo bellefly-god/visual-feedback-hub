@@ -25,12 +25,14 @@ DROP POLICY IF EXISTS "Public access share_links" ON public.share_links;
 -- ============================================
 
 -- projects 表策略
--- 读取：任何人都可以读取（公开反馈场景）
-CREATE POLICY "Anyone can read projects" ON public.projects
-FOR SELECT USING (true);
+-- 读取：只能读取自己的项目或 owner-demo 的项目（公开 demo）
+CREATE POLICY "Users can read own projects" ON public.projects
+FOR SELECT USING (
+  owner_id = 'owner-demo' OR owner_id = auth.uid()::text
+);
 
--- 插入：任何人可以创建项目（owner_demo 用于匿名场景）
-CREATE POLICY "Anyone can create projects" ON public.projects
+-- 插入：已登录用户创建的项目自动绑定用户 ID
+CREATE POLICY "Users can create projects" ON public.projects
 FOR INSERT WITH CHECK (
   owner_id = 'owner-demo' OR owner_id = auth.uid()::text
 );
@@ -38,13 +40,13 @@ FOR INSERT WITH CHECK (
 -- 更新：只有项目所有者可以更新
 CREATE POLICY "Owner can update projects" ON public.projects
 FOR UPDATE USING (
-  owner_id = 'owner-demo' OR owner_id = auth.uid()::text
+  owner_id = auth.uid()::text
 );
 
 -- 删除：只有项目所有者可以删除
 CREATE POLICY "Owner can delete projects" ON public.projects
 FOR DELETE USING (
-  owner_id = 'owner-demo' OR owner_id = auth.uid()::text
+  owner_id = auth.uid()::text
 );
 
 -- comments 表策略
