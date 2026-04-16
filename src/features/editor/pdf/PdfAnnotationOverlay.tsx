@@ -233,7 +233,7 @@ export function PdfAnnotationOverlay({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
     >
-      <svg className="h-full w-full" role="presentation" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px)` }}>
+      <svg className="h-full w-full" role="presentation">
         <defs>
           <marker id="pdf-annotation-arrow-head" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
             <path d="M0,0 L0,6 L6,3 z" fill="context-stroke" />
@@ -242,8 +242,8 @@ export function PdfAnnotationOverlay({
 
         {bounds && (
           <rect
-            x={bounds.x}
-            y={bounds.y}
+            x={bounds.x + panOffset.x}
+            y={bounds.y + panOffset.y}
             width={bounds.width}
             height={bounds.height}
             fill="transparent"
@@ -268,16 +268,16 @@ export function PdfAnnotationOverlay({
                 className="cursor-pointer"
               >
                 <circle
-                  cx={pin.cx}
-                  cy={pin.cy}
+                  cx={pin.cx + panOffset.x}
+                  cy={pin.cy + panOffset.y}
                   r={isSelected ? 11 : 10}
                   fill={isSelected ? activeColor : baseColor}
                   stroke="#ffffff"
                   strokeWidth={2}
                 />
                 <text
-                  x={pin.cx}
-                  y={pin.cy + 0.5}
+                  x={pin.cx + panOffset.x}
+                  y={pin.cy + panOffset.y + 0.5}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fontSize={11}
@@ -300,15 +300,15 @@ export function PdfAnnotationOverlay({
                 onSelectAnnotation(annotation.id);
               }}>
                 <line
-                  x1={arrow.x1}
-                  y1={arrow.y1}
-                  x2={arrow.x2}
-                  y2={arrow.y2}
+                  x1={arrow.x1 + panOffset.x}
+                  y1={arrow.y1 + panOffset.y}
+                  x2={arrow.x2 + panOffset.x}
+                  y2={arrow.y2 + panOffset.y}
                   stroke={isSelected ? activeColor : baseColor}
                   strokeWidth={isSelected ? 3 : 2}
                   markerEnd="url(#pdf-annotation-arrow-head)"
                 />
-                {displayOrder > 0 && renderOrderBadge(displayOrder, anchor)}
+                {displayOrder > 0 && renderOrderBadge(displayOrder, { x: anchor.x + panOffset.x, y: anchor.y + panOffset.y })}
               </g>
             );
           }
@@ -321,7 +321,7 @@ export function PdfAnnotationOverlay({
               <g key={annotation.id} className="cursor-pointer" onPointerDown={(event) => {
                 event.stopPropagation();
                 onSelectAnnotation(annotation.id);
-              }}>
+              }} transform={`translate(${panOffset.x}, ${panOffset.y})`}>
                 <path
                   d={pathData}
                   fill="none"
@@ -345,8 +345,8 @@ export function PdfAnnotationOverlay({
                 onSelectAnnotation(annotation.id);
               }}>
                 <text
-                  x={textGeom.x}
-                  y={textGeom.y}
+                  x={textGeom.x + panOffset.x}
+                  y={textGeom.y + panOffset.y}
                   fontSize={textGeom.fontSize}
                   fontWeight={500}
                   fill={isSelected ? activeColor : baseColor}
@@ -354,7 +354,7 @@ export function PdfAnnotationOverlay({
                 >
                   {textGeom.text || "Text"}
                 </text>
-                {displayOrder > 0 && renderOrderBadge(displayOrder, anchor)}
+                {displayOrder > 0 && renderOrderBadge(displayOrder, { x: anchor.x + panOffset.x, y: anchor.y + panOffset.y })}
               </g>
             );
           }
@@ -374,8 +374,8 @@ export function PdfAnnotationOverlay({
               onSelectAnnotation(annotation.id);
             }}>
               <rect
-                x={rect.x}
-                y={rect.y}
+                x={rect.x + panOffset.x}
+                y={rect.y + panOffset.y}
                 width={rect.width}
                 height={rect.height}
                 rx={6}
@@ -384,7 +384,7 @@ export function PdfAnnotationOverlay({
                 stroke={isSelected ? activeColor : baseColor}
                 strokeWidth={isSelected ? 2.4 : 2}
               />
-              {displayOrder > 0 && renderOrderBadge(displayOrder, anchor)}
+              {displayOrder > 0 && renderOrderBadge(displayOrder, { x: anchor.x + panOffset.x, y: anchor.y + panOffset.y })}
             </g>
           );
         })}
@@ -396,14 +396,14 @@ export function PdfAnnotationOverlay({
           <>
             {/* 调试用：显示位置标记 */}
             <circle
-              cx={bounds.x + (bounds.width * pendingTextAnnotation.x) / 100}
-              cy={bounds.y + (bounds.height * pendingTextAnnotation.y) / 100}
+              cx={bounds.x + panOffset.x + (bounds.width * pendingTextAnnotation.x) / 100}
+              cy={bounds.y + panOffset.y + (bounds.height * pendingTextAnnotation.y) / 100}
               r="5"
               fill={pendingTextAnnotation.color}
             />
             <foreignObject
-              x={bounds.x + (bounds.width * pendingTextAnnotation.x) / 100}
-              y={bounds.y + (bounds.height * pendingTextAnnotation.y) / 100 - 70}
+              x={bounds.x + panOffset.x + (bounds.width * pendingTextAnnotation.x) / 100}
+              y={bounds.y + panOffset.y + (bounds.height * pendingTextAnnotation.y) / 100 - 70}
               width="200"
               height="70"
               requiredExtensions="http://www.w3.org/1999/xhtml"
