@@ -55,6 +55,16 @@ export function getPdfPenPathGeometry(annotation: NormalizedAnnotation, bounds: 
   return `M ${first.x} ${first.y} ${rest.map((point) => `L ${point.x} ${point.y}`).join(" ")}`;
 }
 
+export function getPdfTextGeometry(annotation: NormalizedAnnotation, bounds: OverlayBounds) {
+  const position = toAbsolutePoint(bounds, annotation.x, annotation.y);
+  return {
+    x: position.x,
+    y: position.y,
+    text: annotation.textContent ?? "",
+    fontSize: annotation.fontSize ?? 14,
+  };
+}
+
 export function getPdfAnnotationAnchor(annotation: NormalizedAnnotation, bounds: OverlayBounds) {
   const shapeType = annotation.shapeType as string;
 
@@ -71,6 +81,11 @@ export function getPdfAnnotationAnchor(annotation: NormalizedAnnotation, bounds:
   if (shapeType === "pen" && annotation.pathPoints && annotation.pathPoints.length > 0) {
     const firstPoint = toAbsolutePoint(bounds, annotation.pathPoints[0].x, annotation.pathPoints[0].y);
     return { x: firstPoint.x, y: firstPoint.y };
+  }
+
+  if (shapeType === "text") {
+    const text = getPdfTextGeometry(annotation, bounds);
+    return { x: text.x, y: text.y };
   }
 
   const rect = getPdfRectGeometry(annotation, bounds);

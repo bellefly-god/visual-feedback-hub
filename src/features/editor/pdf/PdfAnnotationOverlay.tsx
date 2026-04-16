@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, type PointerEventHandler } from "react";
 import type { AnnotationColorState } from "@/features/editor/shared/types/editor-state";
 import type { NormalizedAnnotation, ToolMode } from "@/features/editor/shared/types/annotation";
 import type { OverlayBounds } from "@/features/editor/shared/coords/normalizedCoords";
-import { getPdfAnnotationAnchor, getPdfArrowGeometry, getPdfPenPathGeometry, getPdfPinGeometry, getPdfRectGeometry } from "@/features/editor/pdf/pdfOverlayRenderers";
+import { getPdfAnnotationAnchor, getPdfArrowGeometry, getPdfPenPathGeometry, getPdfPinGeometry, getPdfRectGeometry, getPdfTextGeometry } from "@/features/editor/pdf/pdfOverlayRenderers";
 import { adjustColor, sanitizeAnnotationColor, toRgba } from "@/features/editor/shared/colors/annotationColor";
 
 type DragPreview = {
@@ -33,6 +33,12 @@ interface PdfAnnotationOverlayProps {
   onPointerMove: PointerEventHandler<HTMLDivElement>;
   onPointerUp: PointerEventHandler<HTMLDivElement>;
   onPointerCancel: PointerEventHandler<HTMLDivElement>;
+  // 平移支持
+  panOffset?: { x: number; y: number };
+  onPanChange?: (offset: { x: number; y: number }) => void;
+  isPanning?: boolean;
+  onPanStart?: () => void;
+  onPanEnd?: () => void;
 }
 
 function renderPreview(preview: InteractionPreview, colors: AnnotationColorState) {
@@ -129,16 +135,83 @@ export function PdfAnnotationOverlay({
   onPointerMove,
   onPointerUp,
   onPointerCancel,
+  panOffset = { x: 0, y: 0 },
+  onPanChange,
+  isPanning = false,
+  onPanStart,
+  onPanEnd,
 }: PdfAnnotationOverlayProps) {
   const cursorClass = mode === "editor" && toolMode !== "select" ? "cursor-crosshair" : "cursor-default";
+  
+  // 平移状态
+  const panStartRef = useRef<{ x: number; y: number; panStartOffset: { x: number; y: number } } | null>(null);
+
+  // 判断是否可以使用平移（在 select 模式下）
+  const canPan = (toolMode === "select" || mode === "review") && onPanChange;
+
+  // 处理平移的 Pointer 事件
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!canPan || event.button !== 0) {
+      onPointerDown(event);
+      return;
+    }
+
+    // 开始平移
+    panStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      panStartOffset: panOffset,
+    };
+    onPanStart?.();
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!panStartRef.current) {
+      onPointerMove(event);
+      return;
+    }
+
+    // 拖拽平移
+    const dx = event.clientX - panStartRef.current.x;
+    const dy = event.clientY - panStartRef.current.y;
+    onPanChange?.({
+      x: panStartRef.current.panStartOffset.x + dx,
+      y: panStartRef.current.panStartOffset.y + dy,
+    });
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!panStartRef.current) {
+      onPointerUp(event);
+      return;
+    }
+
+    // 结束平移
+    panStartRef.current = null;
+    onPanEnd?.();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handlePointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
+    panStartRef.current = null;
+    onPanEnd?.();
+    onPointerCancel(event);
+  };
+
+  // 更新光标样式以指示可平移
+  const panCursorClass = canPan ? "cursor-grab" : cursorClass;
+  const effectiveCursorClass = isPanning ? "cursor-grabbing" : panCursorClass;
 
   return (
     <div
-      className={`absolute inset-0 touch-none ${cursorClass}`}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
+      className={`absolute inset-0 touch-none ${effectiveCursorClass}`}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
     >
       <svg className="h-full w-full" role="presentation">
         <defs>
@@ -237,6 +310,30 @@ export function PdfAnnotationOverlay({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
+                {displayOrder > 0 && renderOrderBadge(displayOrder, anchor)}
+              </g>
+            );
+          }
+
+          if (annotation.shapeType === "text") {
+            const textGeom = getPdfTextGeometry(annotation, bounds);
+            const anchor = getPdfAnnotationAnchor(annotation, bounds);
+            const displayOrder = annotation.displayOrder ?? annotation.pinNumber ?? 0;
+            return (
+              <g key={annotation.id} className="cursor-pointer" onPointerDown={(event) => {
+                event.stopPropagation();
+                onSelectAnnotation(annotation.id);
+              }}>
+                <text
+                  x={textGeom.x}
+                  y={textGeom.y}
+                  fontSize={textGeom.fontSize}
+                  fontWeight={500}
+                  fill={isSelected ? activeColor : baseColor}
+                  style={{ userSelect: "none" }}
+                >
+                  {textGeom.text || "Text"}
+                </text>
                 {displayOrder > 0 && renderOrderBadge(displayOrder, anchor)}
               </g>
             );

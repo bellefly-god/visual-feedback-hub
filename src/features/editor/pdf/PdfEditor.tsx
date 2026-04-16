@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize2, RotateCcw } from "lucide-react";
 import { PdfPageCanvas } from "@/features/editor/pdf/PdfPageCanvas";
 import { PdfAnnotationOverlay } from "@/features/editor/pdf/PdfAnnotationOverlay";
 import { usePdfInteractions } from "@/features/editor/pdf/usePdfInteractions";
@@ -44,6 +44,9 @@ export function PdfEditor({
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit-page");
   const [customScale, setCustomScale] = useState(1);
   const [zoomPercentage, setZoomPercentage] = useState(100);
+  // 平移状态
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
 
   const colors = useAnnotationColors();
   const { handlers, preview } = usePdfInteractions({
@@ -58,14 +61,22 @@ export function PdfEditor({
   const handleZoomModeChange = (newMode: ZoomMode) => {
     setZoomMode(newMode);
     setCustomScale(1); // Reset custom scale when changing mode
+    setPanOffset({ x: 0, y: 0 }); // Reset pan when changing zoom mode
   };
 
   const handleZoomIn = () => {
     setCustomScale((prev) => Math.min(prev + 0.25, 3));
+    // 缩放时不重置平移，让用户可以继续查看之前的位置
   };
 
   const handleZoomOut = () => {
     setCustomScale((prev) => Math.max(prev - 0.25, 0.25));
+    // 缩放时不重置平移，让用户可以继续查看之前的位置
+  };
+
+  // 重置平移
+  const handleResetPan = () => {
+    setPanOffset({ x: 0, y: 0 });
   };
 
   // 键盘快捷键
@@ -96,6 +107,7 @@ export function PdfEditor({
         e.preventDefault();
         setZoomMode("fit-page");
         setCustomScale(1);
+        setPanOffset({ x: 0, y: 0 });
         return;
       }
 
@@ -104,6 +116,7 @@ export function PdfEditor({
         e.preventDefault();
         setZoomMode("fit-page");
         setCustomScale(1);
+        setPanOffset({ x: 0, y: 0 });
         return;
       }
 
@@ -112,6 +125,7 @@ export function PdfEditor({
         e.preventDefault();
         setZoomMode("fit-width");
         setCustomScale(1);
+        setPanOffset({ x: 0, y: 0 });
         return;
       }
     };
@@ -140,6 +154,11 @@ export function PdfEditor({
           zoomMode={zoomMode}
           customScale={customScale}
           onZoomPercentageChange={setZoomPercentage}
+          panOffset={panOffset}
+          onPanChange={setPanOffset}
+          isPanning={isPanning}
+          onPanStart={() => setIsPanning(true)}
+          onPanEnd={() => setIsPanning(false)}
         />
 
         <PdfAnnotationOverlay
@@ -155,6 +174,12 @@ export function PdfEditor({
           onPointerMove={handlers.onPointerMove}
           onPointerUp={handlers.onPointerUp}
           onPointerCancel={handlers.onPointerCancel}
+          // 平移支持
+          panOffset={panOffset}
+          onPanChange={setPanOffset}
+          isPanning={isPanning}
+          onPanStart={() => setIsPanning(true)}
+          onPanEnd={() => setIsPanning(false)}
         />
       </div>
 
@@ -204,6 +229,24 @@ export function PdfEditor({
           title="Zoom In"
         >
           <ZoomIn className="h-3.5 w-3.5" />
+        </button>
+
+        {/* 分隔线 */}
+        <div className="h-4 w-px bg-border/50" />
+
+        {/* 重置平移按钮 */}
+        <button
+          type="button"
+          className={`rounded p-1 transition-colors ${
+            panOffset.x !== 0 || panOffset.y !== 0
+              ? "text-primary hover:bg-primary/10"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+          onClick={handleResetPan}
+          title="Reset Position"
+          disabled={panOffset.x === 0 && panOffset.y === 0}
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

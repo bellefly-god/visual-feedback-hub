@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from "react";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Move } from "lucide-react";
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy, type PDFPageProxy } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { getFittedPdfViewport, type ZoomMode } from "@/features/editor/pdf/usePdfViewport";
@@ -16,6 +16,12 @@ interface PdfPageCanvasProps {
   zoomMode?: ZoomMode;
   customScale?: number;
   onZoomPercentageChange?: (percentage: number) => void;
+  // 平移支持
+  panOffset?: { x: number; y: number };
+  onPanChange?: (offset: { x: number; y: number }) => void;
+  isPanning?: boolean;
+  onPanStart?: () => void;
+  onPanEnd?: () => void;
 }
 
 interface StageSize {
@@ -51,6 +57,11 @@ export function PdfPageCanvas({
   zoomMode = "fit-page",
   customScale = 1,
   onZoomPercentageChange,
+  panOffset = { x: 0, y: 0 },
+  onPanChange,
+  isPanning = false,
+  onPanStart,
+  onPanEnd,
 }: PdfPageCanvasProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -220,8 +231,9 @@ export function PdfPageCanvas({
         canvas.height = Math.max(1, Math.floor(viewport.height * devicePixelRatio));
         canvas.style.width = `${viewport.width}px`;
         canvas.style.height = `${viewport.height}px`;
-        canvas.style.left = `${fitted.x}px`;
-        canvas.style.top = `${fitted.y}px`;
+        // 应用平移偏移
+        canvas.style.left = `${fitted.x + panOffset.x}px`;
+        canvas.style.top = `${fitted.y + panOffset.y}px`;
 
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
         context.clearRect(0, 0, viewport.width, viewport.height);
@@ -237,7 +249,13 @@ export function PdfPageCanvas({
 
         if (hasMeaningfulBoundsChange(lastBoundsRef.current, fitted)) {
           lastBoundsRef.current = fitted;
-          onBoundsChange(fitted);
+          // 应用平移偏移到 bounds
+          onBoundsChange({
+            x: fitted.x + panOffset.x,
+            y: fitted.y + panOffset.y,
+            width: fitted.width,
+            height: fitted.height,
+          });
         }
 
         // 计算并报告缩放百分比
@@ -259,7 +277,7 @@ export function PdfPageCanvas({
     return () => {
       cancelled = true;
     };
-  }, [onBoundsChange, page, pageCount, stageSize.height, stageSize.width, src, zoomMode, customScale, onZoomPercentageChange]);
+  }, [onBoundsChange, page, pageCount, stageSize.height, stageSize.width, src, zoomMode, customScale, onZoomPercentageChange, panOffset.x, panOffset.y]);
 
   const currentPage = Math.max(1, Math.min(page, pageCount));
 
