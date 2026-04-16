@@ -47,6 +47,8 @@ export function PdfEditor({
   // 平移状态
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  // 文本工具待处理状态
+  const [pendingTextAnnotation, setPendingTextAnnotation] = useState<{ x: number; y: number; color: string } | null>(null);
 
   const colors = useAnnotationColors();
   const { handlers, preview } = usePdfInteractions({
@@ -56,7 +58,29 @@ export function PdfEditor({
     activeColor: colors.stroke,
     onSelectAnnotation,
     onCreateAnnotation,
+    pendingTextAnnotation,
+    onSetPendingTextAnnotation: setPendingTextAnnotation,
   });
+
+  // 文本提交处理
+  const handleTextSubmit = (text: string) => {
+    if (pendingTextAnnotation && onCreateAnnotation) {
+      onCreateAnnotation({
+        shapeType: "text",
+        x: pendingTextAnnotation.x,
+        y: pendingTextAnnotation.y,
+        color: pendingTextAnnotation.color,
+        textContent: text,
+        fontSize: 14,
+      });
+    }
+    setPendingTextAnnotation(null);
+  };
+
+  // 文本取消处理
+  const handleTextCancel = () => {
+    setPendingTextAnnotation(null);
+  };
 
   const handleZoomModeChange = (newMode: ZoomMode) => {
     setZoomMode(newMode);
@@ -180,6 +204,10 @@ export function PdfEditor({
           isPanning={isPanning}
           onPanStart={() => setIsPanning(true)}
           onPanEnd={() => setIsPanning(false)}
+          // 文本工具支持
+          pendingTextAnnotation={pendingTextAnnotation}
+          onTextSubmit={handleTextSubmit}
+          onTextCancel={handleTextCancel}
         />
       </div>
 

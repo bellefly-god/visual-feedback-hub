@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, type PointerEventHandler } from "react";
 import type { AnnotationColorState } from "@/features/editor/shared/types/editor-state";
 import type { NormalizedAnnotation, ToolMode } from "@/features/editor/shared/types/annotation";
 import type { OverlayBounds } from "@/features/editor/shared/coords/normalizedCoords";
+import { toAbsolutePoint } from "@/features/editor/shared/coords/normalizedCoords";
 import { getPdfAnnotationAnchor, getPdfArrowGeometry, getPdfPenPathGeometry, getPdfPinGeometry, getPdfRectGeometry, getPdfTextGeometry } from "@/features/editor/pdf/pdfOverlayRenderers";
 import { adjustColor, sanitizeAnnotationColor, toRgba } from "@/features/editor/shared/colors/annotationColor";
 
@@ -39,6 +40,10 @@ interface PdfAnnotationOverlayProps {
   isPanning?: boolean;
   onPanStart?: () => void;
   onPanEnd?: () => void;
+  // 文本工具支持
+  pendingTextAnnotation?: { x: number; y: number; color: string } | null;
+  onTextSubmit?: (text: string) => void;
+  onTextCancel?: () => void;
 }
 
 function renderPreview(preview: InteractionPreview, colors: AnnotationColorState) {
@@ -140,11 +145,26 @@ export function PdfAnnotationOverlay({
   isPanning = false,
   onPanStart,
   onPanEnd,
+  pendingTextAnnotation,
+  onTextSubmit,
+  onTextCancel,
 }: PdfAnnotationOverlayProps) {
   const cursorClass = mode === "editor" && toolMode !== "select" ? "cursor-crosshair" : "cursor-default";
   
   // 平移状态
   const panStartRef = useRef<{ x: number; y: number; panStartOffset: { x: number; y: number } } | null>(null);
+  // 文本输入框 ref
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 当 pendingTextAnnotation 出现时，延迟聚焦 textarea
+  useEffect(() => {
+    if (pendingTextAnnotation && textareaRef.current) {
+      const timer = requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+      return () => cancelAnimationFrame(timer);
+    }
+  }, [pendingTextAnnotation]);
 
   // 判断是否可以使用平移（在 select 模式下）
   const canPan = (toolMode === "select" || mode === "review") && onPanChange;
@@ -213,7 +233,7 @@ export function PdfAnnotationOverlay({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
     >
-      <svg className="h-full w-full" role="presentation">
+      <svg className="h-full w-full" role="presentation" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px)` }}>
         <defs>
           <marker id="pdf-annotation-arrow-head" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
             <path d="M0,0 L0,6 L6,3 z" fill="context-stroke" />
@@ -370,6 +390,118 @@ export function PdfAnnotationOverlay({
         })}
 
         {preview && renderPreview(preview, colors)}
+
+        {/* 文本输入框 */}
+        {pendingTextAnnotation && bounds ? (
+          <>
+            {/* 调试用：显示位置标记 */}
+            <circle
+              cx={bounds.x + (bounds.width * pendingTextAnnotation.x) / 100}
+              cy={bounds.y + (bounds.height * pendingTextAnnotation.y) / 100}
+              r="5"
+              fill={pendingTextAnnotation.color}
+            />
+            <foreignObject
+              x={bounds.x + (bounds.width * pendingTextAnnotation.x) / 100}
+              y={bounds.y + (bounds.height * pendingTextAnnotation.y) / 100 - 70}
+              width="200"
+              height="70"
+              requiredExtensions="http://www.w3.org/1999/xhtml"
+            >
+              <div
+                xmlns="http://www.w3.org/1999/xhtml"
+                style={{
+                  backgroundColor: pendingTextAnnotation.color,
+                  borderColor: pendingTextAnnotation.color,
+                  borderRadius: '8px',
+                  borderWidth: '2px',
+                  borderStyle: 'solid',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  padding: '8px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <textarea
+                  ref={textareaRef}
+                  id="text-annotation-input"
+                  style={{
+                    resize: 'none',
+                    border: 'none',
+                    background: 'transparent',
+                    outline: 'none',
+                    color: 'white',
+                    width: '100%',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    minHeight: '21px',
+                  }}
+                  placeholder="输入文字..."
+                  rows={1}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      const value = (e.target as HTMLTextAreaElement).value;
+                      if (value.trim()) {
+                        onTextSubmit?.(value.trim());
+                      }
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      onTextCancel?.();
+                    }
+                  }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                  <button
+                    style={{
+                      height: '24px',
+                      padding: '0 8px',
+                      fontSize: '11px',
+                      color: 'rgba(255, 255, 255, 0.8)',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onTextCancel?.();
+                    }}
+                  >
+                    取消
+                  </button>
+                  <button
+                    style={{
+                      height: '24px',
+                      padding: '0 8px',
+                      fontSize: '11px',
+                      color: '#1f2937',
+                      background: 'rgba(255, 255, 255, 0.9)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const textarea = textareaRef.current;
+                      const value = textarea?.value || "";
+                      if (value.trim()) {
+                        onTextSubmit?.(value.trim());
+                      }
+                    }}
+                  >
+                    确认
+                  </button>
+                </div>
+              </div>
+            </foreignObject>
+          </>
+        ) : null}
       </svg>
     </div>
   );

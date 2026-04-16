@@ -31,6 +31,9 @@ interface UsePdfInteractionsParams {
   activeColor?: string;
   onSelectAnnotation: (annotationId: string | null) => void;
   onCreateAnnotation?: (payload: CreateAnnotationPayload) => void;
+  // 文本工具支持
+  pendingTextAnnotation?: { x: number; y: number; color: string } | null;
+  onSetPendingTextAnnotation?: (pending: { x: number; y: number; color: string } | null) => void;
 }
 
 function isDragToolMode(mode: ToolMode): mode is DragToolMode {
@@ -48,6 +51,8 @@ export function usePdfInteractions({
   activeColor = "#2563eb",
   onSelectAnnotation,
   onCreateAnnotation,
+  pendingTextAnnotation,
+  onSetPendingTextAnnotation,
 }: UsePdfInteractionsParams) {
   const sessionRef = useRef<InteractionSession | null>(null);
   const [preview, setPreview] = useState<InteractionSession | null>(null);
@@ -193,16 +198,14 @@ export function usePdfInteractions({
         return;
       }
 
-      // 文本工具：点击放置文字
+      // 文本工具：点击放置文字输入框
       if (isTextToolMode(toolMode)) {
         const normalizedPoint = toNormalizedPoint(bounds, clampedPoint);
-        onCreateAnnotation?.({
-          shapeType: "text",
+        // 设置待处理的文本标注，显示输入框
+        onSetPendingTextAnnotation?.({
           x: normalizedPoint.x,
           y: normalizedPoint.y,
           color: activeColor,
-          textContent: "",
-          fontSize: 14,
         });
         return;
       }

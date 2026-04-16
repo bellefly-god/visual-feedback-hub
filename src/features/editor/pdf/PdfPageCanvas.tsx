@@ -249,10 +249,10 @@ export function PdfPageCanvas({
 
         if (hasMeaningfulBoundsChange(lastBoundsRef.current, fitted)) {
           lastBoundsRef.current = fitted;
-          // 应用平移偏移到 bounds
+          // bounds 保持原始位置（不包含 panOffset）
           onBoundsChange({
-            x: fitted.x + panOffset.x,
-            y: fitted.y + panOffset.y,
+            x: fitted.x,
+            y: fitted.y,
             width: fitted.width,
             height: fitted.height,
           });
